@@ -1,0 +1,11 @@
+import React from 'react';
+import { CheckCircle2, Search } from 'lucide-react';
+import { t } from '../freelance-i18n';
+
+export function Card({children,className=''}){ return <section className={`card ${className}`}>{children}</section>; }
+export function PageHeader({lang,titleAr,titleEn,subAr,subEn,action}){ return <div className="page-header"><div><div className="eyebrow">HUB FREELANCE</div><h1>{t(lang,titleAr,titleEn)}</h1><p>{t(lang,subAr,subEn)}</p></div>{action && <div className="page-header-action">{action}</div>}</div>; }
+export function SearchBox({lang,placeholderAr='ابحث...',placeholderEn='Search...',value,onChange,compact=false}){return <div className={`input-search ${compact?'compact':''}`}><Search size={17}/><input value={value} onChange={onChange} placeholder={t(lang,placeholderAr,placeholderEn)}/></div>;}
+export function Stat({lang,icon:Icon,labelAr,labelEn,value,delta,tone='blue'}){return <Card className="stat"><div className={`stat-icon ${tone}`}><Icon size={20}/></div><div><div className="muted">{t(lang,labelAr,labelEn)}</div><strong>{value}</strong>{delta && <span className="trend">↗ {delta}</span>}</div></Card>;}
+export function Status({lang,type}){const map={active:['نشطة','Active','green'],pending:['قيد المراجعة','Pending','amber'],shortlisted:['القائمة القصيرة','Shortlisted','purple'],accepted:['مقبولة','Accepted','green'],rejected:['مرفوضة','Rejected','red'],completed:['مكتمل','Completed','green'],inprogress:['قيد التنفيذ','In Progress','blue'],delivered:['تم التسليم','Delivered','blue'],hidden:['مخفية','Hidden','gray'],resolved:['تم الحل','Resolved','green']};const s=map[type]||map.active;return <span className={`status ${s[2]}`}><span className="dot"/>{t(lang,s[0],s[1])}</span>;}
+export function Modal({lang,titleAr,titleEn,children,onClose}){return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><h3>{t(lang,titleAr,titleEn)}</h3><button className="icon-btn" onClick={onClose}>×</button></div><div className="modal-body">{children}</div></div></div>;}
+export function Empty({lang,titleAr,titleEn,bodyAr,bodyEn}){return <div className="empty"><CheckCircle2 size={30}/><h3>{t(lang,titleAr,titleEn)}</h3><p>{t(lang,bodyAr,bodyEn)}</p></div>;}
