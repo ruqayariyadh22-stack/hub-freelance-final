@@ -17,22 +17,23 @@ import AdminStatistics from './admin/pages/Statistics';
 import AdminSettings from './admin/pages/Settings';
 import ClientApp from './client/App';
 import FreelancerApp from './freelancer/freelance-App';
-
+import AboutProject from './AboutProject';
 function LoginPage() {
   const navigate = useNavigate();
-  const [role, setRole] = useState('client');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-
+  const [role, setRole] = useState("client");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const submit = (e) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password.');
+      setError("Please enter your email and password.");
       return;
     }
-    localStorage.setItem('hub_role', role);
-    navigate(role === 'client' ? '/client' : '/freelancer');
+
+    localStorage.setItem("hub_role", role);
+
+    navigate(role === "client" ? "/client" : "/freelancer");
   };
 
   return (
@@ -54,9 +55,17 @@ function LoginPage() {
           </div>
         </div>
       </section>
+<section className="login-panel">
 
-      <section className="login-panel">
-        <div className="login-card">
+  <button
+    className="about-project-btn"
+    onClick={() => navigate("/about")}
+  >
+    About Project
+  </button>
+
+  <div className="login-card">
+    
           <div className="mobile-brand"><HubLogo showText subtitle="Freelance platform" /></div>
           <h2>Sign in</h2>
           <p className="lead">Choose your workspace and continue to your Freelance Hub account.</p>
@@ -101,21 +110,35 @@ function ClientWorkspace() {
   return <WorkspaceGate role="client"><div className="hub-client-root"><ClientApp /></div></WorkspaceGate>;
 }
 
+  function Aboutproject() {
+    if (showAbout){ return<AboutProject/>} 
+  
+}
 function FreelancerWorkspace() {
   return <WorkspaceGate role="freelancer"><div className="hub-freelancer-root"><FreelancerApp /></div></WorkspaceGate>;
 }
 
+
+
 export default function App() {
   return (
     <Routes>
+      {/* Main Login */}
       <Route path="/" element={<LoginPage />} />
 
-      {/* Client and Freelancer have completely separate workspace entry points. */}
+      {/* About Project - available from all pages */}
+      <Route path="/about" element={<AboutProject />} />
+
+      {/* Client */}
       <Route path="/client/*" element={<ClientWorkspace />} />
+
+      {/* Freelancer */}
       <Route path="/freelancer/*" element={<FreelancerWorkspace />} />
 
-      {/* Admin is isolated under /admin/* and never appears in the public login. */}
+      {/* Admin Login */}
       <Route path="/admin" element={<AdminLoginGate />} />
+
+      {/* Admin Pages */}
       <Route path="/admin" element={<AdminProtectedLayout />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboard />} />
@@ -132,6 +155,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="dashboard" replace />} />
       </Route>
 
+      {/* Unknown pages */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
