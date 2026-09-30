@@ -346,7 +346,7 @@ export default function AboutProject() {
           <div className="team-line"></div>
 
           <p>
-            Hub Freelance — A university project designed to connect
+            Hub Freelance — A project designed to connect
             clients and freelancers through a structured digital workspace.
           </p>
         </div>

@@ -135,25 +135,28 @@ export default function App() {
       {/* Freelancer */}
       <Route path="/freelancer/*" element={<FreelancerWorkspace />} />
 
-      {/* Admin Login */}
-      <Route path="/admin" element={<AdminLoginGate />} />
+    {/* Admin */}
+<Route path="/admin">
+  {/* Admin Login */}
+  <Route index element={<AdminLoginGate />} />
+  {/* Protected Admin Pages */}
+  <Route element={<AdminProtectedLayout />}>
+    <Route path="dashboard" element={<AdminDashboard />} />
+    <Route path="users" element={<AdminUsers />} />
+    <Route path="services" element={<AdminServices />} />
+    <Route path="projects" element={<AdminProjects />} />
+    <Route path="orders" element={<AdminOrders />} />
+    <Route path="subscriptions" element={<AdminSubscriptions />} />
+    <Route path="payments" element={<AdminPayments />} />
+    <Route path="reports" element={<AdminReports />} />
+    <Route path="reviews" element={<AdminReviews />} />
+    <Route path="statistics" element={<AdminStatistics />} />
+    <Route path="settings" element={<AdminSettings />} />
+    <Route path="*" element={<Navigate to="dashboard" replace />} />
+  </Route>
+</Route>
 
-      {/* Admin Pages */}
-      <Route path="/admin" element={<AdminProtectedLayout />}>
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="users" element={<AdminUsers />} />
-        <Route path="services" element={<AdminServices />} />
-        <Route path="projects" element={<AdminProjects />} />
-        <Route path="orders" element={<AdminOrders />} />
-        <Route path="subscriptions" element={<AdminSubscriptions />} />
-        <Route path="payments" element={<AdminPayments />} />
-        <Route path="reports" element={<AdminReports />} />
-        <Route path="reviews" element={<AdminReviews />} />
-        <Route path="statistics" element={<AdminStatistics />} />
-        <Route path="settings" element={<AdminSettings />} />
-        <Route path="*" element={<Navigate to="dashboard" replace />} />
-      </Route>
+      
 
       {/* Unknown pages */}
       <Route path="*" element={<Navigate to="/" replace />} />

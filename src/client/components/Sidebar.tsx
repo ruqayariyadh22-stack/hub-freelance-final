@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import HubLogo from '../../shared/HubLogo';
 import {
   LayoutDashboard,
@@ -10,13 +11,38 @@ import {
   ShieldAlert,
   Star,
   Settings,
-
+  LogOut,
   PlusCircle,
   Building2,
   ChevronRight,
   ChevronLeft,
   Handshake
 } from 'lucide-react';
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elementName: string]: React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
+    }
+  }
+}
+
+declare module 'react/jsx-runtime' {
+  export const Fragment: React.ExoticComponent<{ children?: React.ReactNode }>;
+  export function jsx(
+    type: React.ElementType,
+    props: Record<string, unknown>,
+    key?: React.Key
+  ): React.ReactElement;
+  export function jsxs(
+    type: React.ElementType,
+    props: Record<string, unknown>,
+    key?: React.Key
+  ): React.ReactElement;
+}
 
 export type ActiveTab =
   | 'dashboard'
@@ -46,6 +72,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingProposalsCount = 3,
   isArabic
 }) => {
+
+const navigate = useNavigate();
   const menuItems = [
     {
       id: 'dashboard' as ActiveTab,
@@ -70,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'workspace' as ActiveTab,
       label: isArabic ? 'مساحة العمل والعقود' : 'Workspace & Orders',
       icon: Briefcase,
-      badge: unreadScopeChangesCount > 0 ? isArabic ? 'تعديل' : 'Update' : null,
+      badge: unreadScopeChangesCount > 0 ? (isArabic ? 'تعديل' : 'Update') : null,
       badgeColor: 'bg-amber-500'
     },
     {
@@ -160,7 +188,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
-
+{/* Logout */}
+<div className="px-3 pb-2">
+  <button
+    onClick={() => {
+      localStorage.removeItem('hub_role');
+      navigate('/');
+    }}
+    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-red-500/10 transition-all duration-150"
+  >
+    <LogOut className="w-4 h-4 text-red-400" />
+    <span>{isArabic ? 'تسجيل الخروج' : 'Logout'}</span>
+  </button>
+</div>
       {/* Client Profile Footer Card */}
       <div className="p-3.5 m-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
         <div className="flex items-center gap-3">

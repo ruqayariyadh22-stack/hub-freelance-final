@@ -1,6 +1,6 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { Bell, BriefcaseBusiness, ChevronDown, FileText, Globe2, LayoutDashboard, Menu, MessageCircle, ShieldCheck, Sparkles, Store, UserRound, WalletCards, Zap, Star, Settings, Flag, X, Search, Receipt } from 'lucide-react';
+import { NavLink, useLocation ,useNavigate } from 'react-router-dom';
+import { Bell, BriefcaseBusiness, ChevronDown, FileText, Globe2, LayoutDashboard, Menu, MessageCircle, ShieldCheck, Sparkles, Store, UserRound, WalletCards, Zap, Star, Settings, Flag, X, Search, Receipt ,LogOut} from 'lucide-react';
 import { t } from '../freelance-i18n';
 import { img } from '../freelance-data';
 import HubLogo from '../../shared/HubLogo';
@@ -22,14 +22,39 @@ const nav = [
 
 export function AppShell({lang,setLang,setAiOpen,mobileOpen,setMobileOpen,children}){
   const location=useLocation();
+  const navigate=useNavigate();
   React.useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen?'open':''}`}>
       <div className="brand"><HubLogo showText subtitle={t(lang,'بوابة المستقل','Freelancer Portal')} /><button className="mobile-close" onClick={()=>setMobileOpen(false)}><X size={18}/></button></div>
-      <button className="side-cta primary"><BriefcaseBusiness size={16}/>{t(lang,'تصفح المشاريع','Browse Projects')}</button>
+      
+<button
+  className="side-cta primary"
+  onClick={()=>{
+    navigate('/freelancer/projects');
+    setMobileOpen(false);
+  }}
+>
+  <BriefcaseBusiness size={16}/>
+  {t(lang,'تصفح المشاريع','Browse Projects')}
+</button>
+
       <div className="side-section">{t(lang,'مساحة العمل','WORKSPACE')}</div>
       <nav>{nav.map(([key,path,ar,en,Icon,badge,tone])=>{const active=path==='/freelancer'?location.pathname==='/freelancer':location.pathname.startsWith(path);return <NavLink key={key} to={path} className={`side-link ${active?'active':''}`} onClick={()=>setMobileOpen(false)}><Icon size={17}/><span>{t(lang,ar,en)}</span>{badge!==undefined&&<span className={`nav-badge ${tone||''}`}>{badge}</span>}</NavLink>})}</nav>
-      <div className="side-profile"><img src={img.avatar}/><div><b>عمر كريم</b><small>{t(lang,'حساب مستقل موثّق','Verified freelancer')}</small></div><span className="online-dot"/></div>
+      <div className="side-profile"><img src={img.avatar}/><div><b>عمر كريم</b><small>{t(lang,'حساب موثّق','Verified freelancer')}</small></div><span className="online-dot"/></div>
+
+<button
+  className="logout-btn"
+  onClick={()=>{
+    localStorage.removeItem('hub_role');
+    localStorage.removeItem('hub_user');
+    navigate('/');
+  }}
+>
+  <LogOut size={17}/>
+  {t(lang,'تسجيل الخروج','Logout')}
+</button>
+
     </aside>
     <div className="app-main">
       <header className="topbar">
@@ -37,9 +62,12 @@ export function AppShell({lang,setLang,setAiOpen,mobileOpen,setMobileOpen,childr
         <div className="breadcrumbs">Hub Freelance <span>/</span> <b>{t(lang,'بوابة المستقل','Freelancer Portal')}</b></div>
         <div className="header-actions">
           <div className="search"><Search size={17}/><input placeholder={t(lang,'ابحث في المشاريع، العروض...','Search projects, proposals...')}/></div>
-          <button className="ai-pill" onClick={()=>setAiOpen(true)}><Sparkles size={15}/>{t(lang,'مساعد الذكاء الاصطناعي','AI Assistant')}</button>
+          <button className="ai-pill" onClick={()=>setAiOpen(true)}>{t(lang,'مساعد الذكاء الاصطناعي','AI Assistant')}</button>
           <button className="lang-btn" onClick={()=>setLang(lang==='ar'?'en':'ar')}><Globe2 size={15}/>{lang==='ar'?'English':'عربي'}</button>
-          <button className="icon-btn notif"><Bell size={17}/><span>3</span></button>
+          <button className="icon-btn notif"
+          onClick={()=>{navigate('/freelancer/notifications')}}
+          >
+          <Bell size={17}/><span>3</span></button>
           <div className="user-top"><img src={img.avatar}/><div><b>{lang==='ar'?'عمر كريم':'Omar Kareem'}</b><small>{t(lang,'حساب مستقل موثّق','Verified freelancer')}</small></div><ChevronDown size={15}/></div>
         </div>
       </header>

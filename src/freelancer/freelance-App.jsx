@@ -14,7 +14,7 @@ import Disputes from './pages/freelance-Disputes';
 import Notifications from './pages/freelance-Notifications';
 import Settings from './pages/freelance-Settings';
 import { t } from './freelance-i18n';
-
+import './freelance-styles.css';
 export default function App(){
  const [lang,setLang]=useState('ar');
  const [mobileOpen,setMobileOpen]=useState(false);
