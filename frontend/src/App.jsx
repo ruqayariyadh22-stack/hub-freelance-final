@@ -1,122 +1,165 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
+import HubLogo from './shared/HubLogo';
+import AdminLogin from './admin/pages/AdminLogin';
+import AdminDashboard from './admin/pages/Dashboard';
+import AdminLayout from './admin/components/AdminLayout';
+import AdminUsers from './admin/pages/Users';
+import AdminServices from './admin/pages/Services';
+import AdminProjects from './admin/pages/Projects';
+import AdminOrders from './admin/pages/Orders';
+import AdminSubscriptions from './admin/pages/Subscriptions';
+import AdminPayments from './admin/pages/Payments';
+import AdminReports from './admin/pages/Reports';
+import AdminReviews from './admin/pages/Reviews';
+import AdminStatistics from './admin/pages/Statistics';
+import AdminSettings from './admin/pages/Settings';
+import ClientApp from './client/App';
+import FreelancerApp from './freelancer/freelance-App';
+import AboutProject from './AboutProject';
+function LoginPage() {
+  const navigate = useNavigate();
+  const [role, setRole] = useState("client");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const submit = (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter your email and password.");
+      return;
+    }
 
-function App() {
-  const [count, setCount] = useState(0)
+    localStorage.setItem("hub_role", role);
+
+    navigate(role === "client" ? "/client" : "/freelancer");
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+    <div className="hub-login">
+      <section className="hub-hero">
+        <div className="hero-content">
+          <div className="hero-logo"><HubLogo size="lg" /></div>
+          <h1>Welcome in Freelance Hub</h1>
+          <p>One connected workspace for clients and freelancers to build, collaborate, deliver and grow.</p>
+          <div className="computer-scene" aria-hidden="true">
+            <span className="float-code fc1">&lt;/&gt;</span>
+            <span className="float-code fc2">{`{ }`}</span>
+            <span className="float-code fc3">&lt;div&gt;</span>
+            <span className="float-code fc4">npm</span>
+            <span className="float-code fc5">01</span>
+            <span className="float-code fc6">#hub</span>
+            <div className="computer"><div className="screen-code"><span>const hub = &#123;</span><span>role: "creator",</span><span>connect: true,</span><span>build: "together"</span><span>&#125;;</span></div></div>
+            <div className="computer-stand" />
+          </div>
         </div>
       </section>
+<section className="login-panel">
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  <button
+    className="about-project-btn"
+    onClick={() => navigate("/about")}
+  >
+    About Project
+  </button>
+
+  <div className="login-card">
+    
+          <div className="mobile-brand"><HubLogo showText subtitle="Freelance platform" /></div>
+          <h2>Sign in</h2>
+          <p className="lead">Choose your workspace and continue to your Freelance Hub account.</p>
+          <div className="role-switch">
+            <button className={role === 'client' ? 'active' : ''} onClick={() => { setRole('client'); setError(''); }}>Client</button>
+            <button className={role === 'freelancer' ? 'active' : ''} onClick={() => { setRole('freelancer'); setError(''); }}>Freelancer</button>
+          </div>
+          <form onSubmit={submit}>
+            <div className="field"><label>Email address</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></div>
+            <div className="field"><label>Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
+            {error && <div className="login-error">{error}</div>}
+            <button className="login-submit" type="submit">Continue as {role === 'client' ? 'Client' : 'Freelancer'} {role === 'client' ? <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/> : <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/>}</button>
+          </form>
+          <p className="login-hint"><ShieldCheck size={13} style={{verticalAlign:'middle',marginRight:4}}/> Demo login: any valid email and password will open the selected workspace.</p>
+        </div>
+      </section>
+    </div>
+  );
 }
 
-export default App
+function WorkspaceGate({ role, children }) {
+  const currentRole = localStorage.getItem('hub_role');
+  if (currentRole !== role) return <Navigate to="/" replace />;
+  return children;
+}
+
+function AdminLoginGate() {
+  if (localStorage.getItem('hub_admin_authenticated') === 'true') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  return <AdminLogin />;
+}
+
+function AdminProtectedLayout() {
+  if (localStorage.getItem('hub_admin_authenticated') !== 'true') {
+    return <Navigate to="/admin" replace />;
+  }
+  return <AdminLayout />;
+}
+
+function ClientWorkspace() {
+  return <WorkspaceGate role="client"><div className="hub-client-root"><ClientApp /></div></WorkspaceGate>;
+}
+
+  function Aboutproject() {
+    if (showAbout){ return<AboutProject/>} 
+  
+}
+function FreelancerWorkspace() {
+  return <WorkspaceGate role="freelancer"><div className="hub-freelancer-root"><FreelancerApp /></div></WorkspaceGate>;
+}
+
+
+
+export default function App() {
+  return (
+    <Routes>
+      {/* Main Login */}
+      <Route path="/" element={<LoginPage />} />
+
+      {/* About Project - available from all pages */}
+      <Route path="/about" element={<AboutProject />} />
+
+      {/* Client */}
+      <Route path="/client/*" element={<ClientWorkspace />} />
+
+      {/* Freelancer */}
+      <Route path="/freelancer/*" element={<FreelancerWorkspace />} />
+
+    {/* Admin */}
+<Route path="/admin">
+  {/* Admin Login */}
+  <Route index element={<AdminLoginGate />} />
+  {/* Protected Admin Pages */}
+  <Route element={<AdminProtectedLayout />}>
+    <Route path="dashboard" element={<AdminDashboard />} />
+    <Route path="users" element={<AdminUsers />} />
+    <Route path="services" element={<AdminServices />} />
+    <Route path="projects" element={<AdminProjects />} />
+    <Route path="orders" element={<AdminOrders />} />
+    <Route path="subscriptions" element={<AdminSubscriptions />} />
+    <Route path="payments" element={<AdminPayments />} />
+    <Route path="reports" element={<AdminReports />} />
+    <Route path="reviews" element={<AdminReviews />} />
+    <Route path="statistics" element={<AdminStatistics />} />
+    <Route path="settings" element={<AdminSettings />} />
+    <Route path="*" element={<Navigate to="dashboard" replace />} />
+  </Route>
+</Route>
+
+      
+
+      {/* Unknown pages */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
