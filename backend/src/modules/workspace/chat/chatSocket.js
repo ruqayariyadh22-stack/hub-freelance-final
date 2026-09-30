@@ -4,7 +4,7 @@ import { verifyAccessToken } from '../../../utils/jwt.js';
 import { findUserById } from '../../users/usersPersistence.js';
 import { findConversationById } from './chatPersistence.js';
 import { createMessage } from './chatService.js';
-import { validateConversationIdParam } from './chatValidation.js';
+import { validateConversationIdParam, validateCreateMessage } from './chatValidation.js';
 
 const conversationRoom = (conversationId) => `conversation:${conversationId}`;
 
@@ -144,9 +144,12 @@ export const attachChatSocket = (io) => {
       try {
         const body = requirePayloadObject(payload);
         const conversationId = validateConversationIdParam(body.conversationId);
-        const messagePayload = Object.prototype.hasOwnProperty.call(body, 'attachments')
-          ? { attachments: body.attachments }
-          : {};
+        const messagePayload = validateCreateMessage({
+          message: body.message,
+          ...(Object.prototype.hasOwnProperty.call(body, 'attachments')
+            ? { attachments: body.attachments }
+            : {}),
+        });
         const data = await createMessage(conversationId, socket.user, messagePayload);
         io.to(conversationRoom(data.conversation_id)).emit('message_created', data);
         reply(ack, { success: true, data });

@@ -188,7 +188,11 @@ export const acceptProposalById = async (proposalId, actor) => {
       });
     }
 
-    return accepted;
+    return {
+      proposal: accepted,
+      contract: result.contract ? { id: result.contract.id } : null,
+      conversation: result.conversation ? { id: result.conversation.id } : null,
+    };
   } catch (error) {
     if (error?.code === '23505') {
       throw new AppError('Contract already exists for this project', 409);

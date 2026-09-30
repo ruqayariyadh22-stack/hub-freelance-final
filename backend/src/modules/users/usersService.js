@@ -1,4 +1,6 @@
 import { AppError } from '../../utils/appError.js';
+import { findClientProfileByUserId } from '../projects/projectsPersistence.js';
+import { findFreelancerProfileByUserId } from '../proposals/proposalsPersistence.js';
 import { findPublicUserById, findUserById, updateUserById } from './usersPersistence.js';
 
 const toSelfUser = (user) => ({
@@ -36,9 +38,33 @@ const requirePublicProfile = (user) => {
   return toPublicProfile(user);
 };
 
+const toSelfProfile = (profile) => {
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    id: profile.id,
+  };
+};
+
+const loadSelfProfile = async (user) => {
+  if (user.role === 'client') {
+    return toSelfProfile(await findClientProfileByUserId(user.id));
+  }
+
+  if (user.role === 'freelancer') {
+    return toSelfProfile(await findFreelancerProfileByUserId(user.id));
+  }
+
+  return null;
+};
+
 export const getCurrentUser = async (userId) => {
   const user = await findUserById(userId);
-  return requireSelfUser(user);
+  const data = requireSelfUser(user);
+  data.profile = await loadSelfProfile(user);
+  return data;
 };
 
 export const updateCurrentUser = async (userId, payload) => {

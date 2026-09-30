@@ -16,7 +16,10 @@ const toPublicConversation = (conversation) => ({
 const toPublicMessage = (message) => ({
   id: message.id,
   conversation_id: message.conversation_id,
+  sender_id: message.sender_id,
+  message: message.message,
   attachments: message.attachments,
+  created_at: message.created_at,
 });
 
 const requireConversation = (conversation) => {
@@ -71,6 +74,8 @@ export const createMessage = async (conversationId, actor, payload) => {
 
   const created = await insertMessage({
     conversationId: conversation.id,
+    senderId: actor.id,
+    message: payload.message,
     attachments: resolveAttachments(payload),
   });
 

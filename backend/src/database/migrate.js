@@ -867,6 +867,23 @@ const AI_USAGE_CREATED_AT_STATEMENTS = [
     ON ai_usage_logs (user_id, created_at)`,
 ];
 
+const MESSAGES_TEXT_MIGRATION_ID = '023_messages_text';
+
+const MESSAGES_TEXT_STATEMENTS = [
+  `ALTER TABLE messages
+    ADD COLUMN IF NOT EXISTS sender_id INTEGER REFERENCES users (id)`,
+  `ALTER TABLE messages
+    ADD COLUMN IF NOT EXISTS message TEXT`,
+  `ALTER TABLE messages
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+  `ALTER TABLE messages
+    ALTER COLUMN sender_id SET NOT NULL`,
+  `ALTER TABLE messages
+    ALTER COLUMN message SET NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS messages_conversation_id_created_at_idx
+    ON messages (conversation_id, created_at)`,
+];
+
 const MIGRATIONS = [
   {
     id: INITIAL_MIGRATION_ID,
@@ -907,6 +924,10 @@ const MIGRATIONS = [
   {
     id: AI_USAGE_CREATED_AT_MIGRATION_ID,
     statements: AI_USAGE_CREATED_AT_STATEMENTS,
+  },
+  {
+    id: MESSAGES_TEXT_MIGRATION_ID,
+    statements: MESSAGES_TEXT_STATEMENTS,
   },
 ];
 

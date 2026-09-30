@@ -12,6 +12,17 @@ const IDENTITY_FIELDS = [
   'requested_by',
 ];
 
+const ALLOWED_FIELDS = ['message', 'attachments'];
+const MAX_MESSAGE_LENGTH = 5000;
+
+const asTrimmedString = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+};
+
 const collectErrors = (errors) => {
   if (errors.length > 0) {
     throw new AppError('Validation failed', 400, errors);
@@ -52,21 +63,35 @@ export const validateCreateMessage = (body = {}) => {
   const errors = [];
   rejectIdentityFields(body, errors);
 
-  const payload = {};
-
-  for (const [field, value] of Object.entries(body)) {
-    if (IDENTITY_FIELDS.includes(field)) {
-      continue;
+  for (const field of Object.keys(body)) {
+    if (!IDENTITY_FIELDS.includes(field) && !ALLOWED_FIELDS.includes(field)) {
+      errors.push({
+        field,
+        message: `${field} is not a documented message field`,
+      });
     }
-
-    payload[field] = value;
   }
 
-  if (Object.keys(payload).length === 0 && errors.length === 0) {
+  const payload = {};
+  const message = asTrimmedString(body.message);
+
+  if (!Object.prototype.hasOwnProperty.call(body, 'message')) {
+    errors.push({ field: 'message', message: 'Message is required' });
+  } else if (typeof body.message !== 'string') {
+    errors.push({ field: 'message', message: 'Message must be a string' });
+  } else if (!message) {
+    errors.push({ field: 'message', message: 'Message cannot be empty' });
+  } else if (message.length > MAX_MESSAGE_LENGTH) {
     errors.push({
-      field: 'body',
-      message: 'Request body cannot be empty',
+      field: 'message',
+      message: `Message must be at most ${MAX_MESSAGE_LENGTH} characters`,
     });
+  } else {
+    payload.message = message;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'attachments')) {
+    payload.attachments = body.attachments;
   }
 
   collectErrors(errors);

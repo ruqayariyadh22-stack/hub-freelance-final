@@ -10,7 +10,10 @@ const CONVERSATION_COLUMNS = `
 const MESSAGE_COLUMNS = `
   id,
   conversation_id,
-  attachments
+  sender_id,
+  message,
+  attachments,
+  created_at
 `;
 
 const runQuery = (executor, text, params) => {
@@ -93,22 +96,30 @@ export const listMessagesByConversationId = async (conversationId) => {
   const result = await query(
     `SELECT ${MESSAGE_COLUMNS}
      FROM messages
-     WHERE conversation_id = $1`,
+     WHERE conversation_id = $1
+     ORDER BY created_at ASC, id ASC`,
     [conversationId],
   );
 
   return result.rows;
 };
 
-export const insertMessage = async ({ conversationId, attachments }) => {
+export const insertMessage = async ({
+  conversationId,
+  senderId,
+  message,
+  attachments,
+}) => {
   const result = await query(
     `INSERT INTO messages (
        conversation_id,
+       sender_id,
+       message,
        attachments
      )
-     VALUES ($1, $2)
+     VALUES ($1, $2, $3, $4)
      RETURNING ${MESSAGE_COLUMNS}`,
-    [conversationId, attachments],
+    [conversationId, senderId, message, attachments],
   );
 
   return result.rows[0];
