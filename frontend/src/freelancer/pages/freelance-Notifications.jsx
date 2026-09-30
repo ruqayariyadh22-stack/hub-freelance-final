@@ -1,84 +1,53 @@
-import React, { useState } from 'react';
-import {
-  Bell,
-  MoreHorizontal,
-  RotateCcw,
-  Check,
-  Trash2,
-} from 'lucide-react';
-
+import React, { useEffect, useState } from 'react';
+import { Bell, Check, MoreHorizontal } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { notifications } from '../freelance-data';
-import { Card, PageHeader } from '../components/freelance-UI';
+import { Card, Empty, PageHeader } from '../components/freelance-UI';
+import { errorMessage, freelancerGet, freelancerPatch } from '../api';
 
 export default function Notifications({ lang, notify }) {
-  const [items, setItems] = useState(
-    notifications.map((item, index) => ({
-      ...item,
-      id: index + 1,
-      read: false,
-    }))
-  );
-
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
+  const [busyId, setBusyId] = useState(null);
 
-  const showMessage = (ar, en) => {
-    if (notify) {
-      notify(t(lang, ar, en));
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await freelancerGet('/notifications');
+      setItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(
+        errorMessage(err, t(lang, 'تعذر تحميل الإشعارات', 'Failed to load notifications')),
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  const markAsRead = (id) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, read: true }
-          : item
-      )
-    );
+  useEffect(() => {
+    load();
+  }, []);
 
-    setOpenMenu(null);
-
-    showMessage(
-      'تم تعليم الإشعار كمقروء',
-      'Notification marked as read'
-    );
+  const markAsRead = async (id) => {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const updated = await freelancerPatch(`/notifications/${id}/read`, {});
+      setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setOpenMenu(null);
+      if (notify) notify(t(lang, 'تم تعليم الإشعار كمقروء', 'Notification marked as read'));
+    } catch (err) {
+      if (notify) {
+        notify(errorMessage(err, t(lang, 'فشل التحديث', 'Update failed')));
+      }
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const deleteNotification = (id) => {
-    setItems((prev) =>
-      prev.filter((item) => item.id !== id)
-    );
-
-    setOpenMenu(null);
-
-    showMessage(
-      'تم حذف الإشعار',
-      'Notification deleted'
-    );
-  };
-
-  const markAllRead = () => {
-    setItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        read: true,
-      }))
-    );
-
-    setOpenMenu(null);
-
-    showMessage(
-      'تم تعليم جميع الإشعارات كمقروءة',
-      'All notifications marked as read'
-    );
-  };
-
-  const toggleMenu = (id) => {
-    setOpenMenu((current) =>
-      current === id ? null : id
-    );
-  };
+  const unread = items.filter((n) => !n.is_read).length;
 
   return (
     <>
@@ -86,188 +55,73 @@ export default function Notifications({ lang, notify }) {
         lang={lang}
         titleAr="الإشعارات"
         titleEn="Notifications"
-        subAr="كل التحديثات المهمة حول عروضك وعقودك ومدفوعاتك."
-        subEn="Important updates about proposals, contracts, and payments."
+        subAr="إشعارات النظام المرتبطة بحسابك."
+        subEn="System notifications for your account."
         action={
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              markAllRead();
-            }}
-          >
-            <RotateCcw size={14} />
-
-            {t(
-              lang,
-              'تعليم الكل كمقروء',
-              'Mark all read'
-            )}
-          </button>
+          <span className="badge-soft blue">
+            <Bell size={12} /> {unread} {t(lang, 'غير مقروء', 'unread')}
+          </span>
         }
       />
 
-      <Card>
-        {items.length > 0 ? (
-          items.map((item) => (
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && (
+        <Card>
+          <p className="notice amber">{error}</p>
+          <button className="primary" type="button" onClick={load}>
+            {t(lang, 'إعادة المحاولة', 'Retry')}
+          </button>
+        </Card>
+      )}
+      {!loading && !error && items.length === 0 && (
+        <Empty
+          lang={lang}
+          titleAr="لا إشعارات"
+          titleEn="No notifications"
+          bodyAr="لا توجد إشعارات حالياً."
+          bodyEn="You have no notifications."
+        />
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <Card>
+          {items.map((item) => (
             <div
+              className={`toggle-row ${item.is_read ? '' : 'unread'}`}
               key={item.id}
-              className="notification"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '11px',
-                padding: '13px 0',
-                borderBottom: '1px solid #e8edf5',
-                background: item.read
-                  ? 'transparent'
-                  : 'linear-gradient(90deg, transparent, #f9fbff)',
-              }}
+              style={{ position: 'relative' }}
             >
-              <div
-                className={`notif-icon ${item.tone}`}
-              >
-                <Bell size={15} />
-              </div>
-
-              <div className="grow">
-                <b>
-                  {t(
-                    lang,
-                    item.titleAr,
-                    item.titleEn
-                  )}
-                </b>
-
+              <div>
+                <b>{item.type}</b>
+                <p>{item.message}</p>
                 <small>
-                  {t(
-                    lang,
-                    item.timeAr,
-                    item.timeEn
-                  )}
+                  {item.created_at ? String(item.created_at).slice(0, 19) : ''}
+                  {item.is_read ? '' : ` · ${t(lang, 'غير مقروء', 'unread')}`}
                 </small>
               </div>
-
-              <div
-                style={{
-                  position: 'relative',
-                  flexShrink: 0,
-                }}
+              <button
+                className="icon-btn"
+                type="button"
+                onClick={() => setOpenMenu(openMenu === item.id ? null : item.id)}
               >
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => toggleMenu(item.id)}
-                >
-                  <MoreHorizontal size={15} />
-                </button>
-
-                {openMenu === item.id && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '40px',
-                      right: '0',
-                      width: '190px',
-                      padding: '8px',
-                      background: '#ffffff',
-                      border: '1px solid #dfe7f5',
-                      borderRadius: '12px',
-                      boxShadow:
-                        '0 8px 24px rgba(16, 33, 59, 0.15)',
-                      zIndex: 9999,
-                      boxSizing: 'border-box',
-                    }}
+                <MoreHorizontal size={16} />
+              </button>
+              {openMenu === item.id && !item.is_read && (
+                <div className="notice" style={{ position: 'absolute', insetInlineEnd: 40, top: 8 }}>
+                  <button
+                    className="ghost"
+                    type="button"
+                    disabled={busyId === item.id}
+                    onClick={() => markAsRead(item.id)}
                   >
-                    {!item.read && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          markAsRead(item.id)
-                        }
-                        style={{
-                          width: '100%',
-                          height: '38px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '7px',
-                          marginBottom: '5px',
-                          border: 'none',
-                          borderRadius: '8px',
-                          background: '#ffffff',
-                          color: '#1f64f4',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Check size={15} />
-
-                        {t(
-                          lang,
-                          'تعليم كمقروء',
-                          'Mark as read'
-                        )}
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        deleteNotification(item.id)
-                      }
-                      style={{
-                        width: '100%',
-                        height: '38px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '7px',
-                        border: 'none',
-                        borderRadius: '8px',
-                        background: '#ffffff',
-                        color: '#1f64f4',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Trash2 size={15} />
-
-                      {t(
-                        lang,
-                        'حذف الإشعار',
-                        'Delete notification'
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
+                    <Check size={14} /> {t(lang, 'تعليمليم كمقروء', 'Mark as read')}
+                  </button>
+                </div>
+              )}
             </div>
-          ))
-        ) : (
-          <div className="empty">
-            <Bell size={28} />
-
-            <h3>
-              {t(
-                lang,
-                'لا توجد إشعارات',
-                'No notifications'
-              )}
-            </h3>
-
-            <p>
-              {t(
-                lang,
-                'أنت مطّلع على كل شيء حالياً.',
-                'You are all caught up.'
-              )}
-            </p>
-          </div>
-        )}
-      </Card>
+          ))}
+        </Card>
+      )}
     </>
   );
 }

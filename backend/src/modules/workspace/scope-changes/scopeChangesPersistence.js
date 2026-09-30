@@ -21,6 +21,18 @@ export const findScopeChangeById = async (scopeChangeId) => {
   return result.rows[0] || null;
 };
 
+export const listScopeChangesByContractId = async (contractId) => {
+  const result = await query(
+    `SELECT ${SCOPE_CHANGE_COLUMNS}
+     FROM scope_changes
+     WHERE contract_id = $1
+     ORDER BY id DESC`,
+    [contractId],
+  );
+
+  return result.rows;
+};
+
 export const insertScopeChange = async ({
   contractId,
   requestedBy,

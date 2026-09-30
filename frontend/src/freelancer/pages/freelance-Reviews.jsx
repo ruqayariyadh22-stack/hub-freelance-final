@@ -1,7 +1,111 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { img } from '../freelance-data';
-import { Card, PageHeader } from '../components/freelance-UI';
+import { Card, Empty, PageHeader } from '../components/freelance-UI';
+import {
+  errorMessage,
+  freelancerGet,
+  getFreelancerProfileId,
+} from '../api';
 
-export default function Reviews({lang}){const rows=[['Maryam Al-Saleh',5,'2026-09-06','تجربة ممتازة جداً، التسليم كان دقيقاً والنتيجة أعلى من المتوقع.','Excellent experience. Delivery was precise and the result exceeded expectations.'],['North Star',5,'2026-08-29','حل المشكلات سريع والتواصل واضح طوال فترة التنفيذ.','Fast problem solving and clear communication throughout delivery.'],['Nexa Media',4.8,'2026-08-12','عمل احترافي ونظام واجهات منظم جداً.','Professional work with a very organized design system.']];return <><PageHeader lang={lang} titleAr="التقييمات والملاحظات" titleEn="Reviews & Ratings" subAr="راجع تقييمات العملاء وجودة تسليم مشاريعك." subEn="Review client feedback and delivery quality." action={<div className="rating-pill"><Star size={15} fill="currentColor"/> 4.9 <span>/ 5.0</span></div>}/><Card><div className="card-head"><div><h3>{t(lang,'سجل التقييمات الممنوحة','Review history')}</h3><p>{t(lang,'الآراء بعد المشاريع المكتملة','Feedback after completed projects')}</p></div></div>{rows.map(r=><div className="review" key={r[0]}><div className="review-head"><div className="client"><img src={img.clientB}/><div><b>{r[0]}</b><small>{r[2]}</small></div></div><div className="stars">{'★'.repeat(Math.round(r[1]))}<span>{r[1].toFixed(1)}</span></div></div><p>{t(lang,r[3],r[4])}</p><div className="tag-row"><span className="tag success">{t(lang,'دقة بالمواعيد','On-time')}</span><span className="tag success">{t(lang,'جودة عالية','High quality')}</span><span className="tag success">{t(lang,'تواصل ممتاز','Great communication')}</span></div></div>)}</Card></>}
+export default function Reviews({ lang }) {
+  const profileId = getFreelancerProfileId();
+  const [reviews, setReviews] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = async () => {
+    if (profileId == null) {
+      setError(t(lang, 'تعذر تحديد ملف المستقل', 'Freelancer profile not found'));
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const [reviewData, profileData] = await Promise.all([
+        freelancerGet(`/freelancers/${profileId}/reviews`),
+        freelancerGet(`/freelancers/${profileId}`),
+      ]);
+      setReviews(Array.isArray(reviewData) ? reviewData : []);
+      setProfile(profileData);
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'تعذر تحميل التقييمات', 'Failed to load reviews')));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const avg =
+    profile?.rating_avg != null ? Number(profile.rating_avg).toFixed(1) : '—';
+
+  return (
+    <>
+      <PageHeader
+        lang={lang}
+        titleAr="التقييمات والملاحظات"
+        titleEn="Reviews & Ratings"
+        subAr="تقييمات العملاء المرتبطة بملفك."
+        subEn="Client reviews linked to your profile."
+        action={
+          <div className="rating-pill">
+            <Star size={15} fill="currentColor" /> {avg}{' '}
+            <span>/ 5.0</span>
+          </div>
+        }
+      />
+
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && (
+        <Card>
+          <p className="notice amber">{error}</p>
+          <button className="primary" type="button" onClick={load}>
+            {t(lang, 'إعادة المحاولة', 'Retry')}
+          </button>
+        </Card>
+      )}
+      {!loading && !error && reviews.length === 0 && (
+        <Empty
+          lang={lang}
+          titleAr="لا تقييمات"
+          titleEn="No reviews"
+          bodyAr="لا توجد تقييمات بعد."
+          bodyEn="You have no reviews yet."
+        />
+      )}
+      {!loading && !error && reviews.length > 0 && (
+        <Card>
+          <div className="card-head">
+            <div>
+              <h3>{t(lang, 'سجل التقييمات', 'Review history')}</h3>
+            </div>
+          </div>
+          {reviews.map((r) => (
+            <div className="review" key={r.id}>
+              <div className="review-head">
+                <div>
+                  <b>
+                    {t(lang, 'عقد', 'Contract')} #{r.contract_id}
+                  </b>
+                  <small>
+                    {t(lang, 'من', 'From')} #{r.reviewer_id}
+                  </small>
+                </div>
+                <div className="stars">
+                  {'★'.repeat(Math.max(0, Math.round(Number(r.rating) || 0)))}
+                  <span>{r.rating != null ? Number(r.rating).toFixed(1) : '—'}</span>
+                </div>
+              </div>
+              <p>{r.comment || '—'}</p>
+            </div>
+          ))}
+        </Card>
+      )}
+    </>
+  );
+}

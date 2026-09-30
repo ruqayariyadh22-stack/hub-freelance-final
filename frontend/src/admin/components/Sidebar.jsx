@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "./LanguageContext";
 import HubLogo from "../../shared/HubLogo";
+import { clearAdminSession } from "../api";
 
 const links = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
@@ -35,9 +36,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem("hub_admin_authenticated");
-    localStorage.removeItem("hub_role");
-
+    clearAdminSession();
     navigate("/admin", { replace: true });
   };
 

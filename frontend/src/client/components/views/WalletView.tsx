@@ -16,22 +16,23 @@ import { WalletTransaction } from '../../types';
 
 interface WalletViewProps {
   transactions: WalletTransaction[];
+  availableBalance: number;
+  escrowLocked: number;
+  totalPaid: number;
   openTopUpModal: () => void;
   isArabic: boolean;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
   transactions,
+  availableBalance,
+  escrowLocked,
+  totalPaid,
   openTopUpModal,
   isArabic
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Balances
-  const availableBalance = 4250;
-  const escrowLocked = 1850;
-  const totalPaid = 6760;
 
   const filteredTransactions = transactions.filter((tx) => {
     const matchesFilter = filterType === 'all' ? true : tx.type === filterType;

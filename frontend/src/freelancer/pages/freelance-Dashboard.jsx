@@ -1,22 +1,243 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BriefcaseBusiness, Check, CircleDollarSign, ShieldCheck, Star } from 'lucide-react';
+import {
+  ArrowLeft,
+  BriefcaseBusiness,
+  CircleDollarSign,
+  ShieldCheck,
+  Star,
+} from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { projects, img } from '../freelance-data';
 import { Card, PageHeader, Stat } from '../components/freelance-UI';
+import {
+  errorMessage,
+  formatMoney,
+  freelancerGet,
+  getFreelancerProfileId,
+  getStoredUser,
+} from '../api';
 
-export default function Dashboard({lang,notify}){
+export default function Dashboard({ lang }) {
   const navigate = useNavigate();
+  const user = getStoredUser();
+  const [wallet, setWallet] = useState(null);
+  const [contracts, setContracts] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [statsNote, setStatsNote] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  return <>
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const profileId = getFreelancerProfileId();
+        const [walletData, contractsData, projectsData] = await Promise.all([
+          freelancerGet('/wallet'),
+          freelancerGet('/contracts'),
+          freelancerGet('/projects'),
+        ]);
+        if (cancelled) return;
+        setWallet(walletData);
+        setContracts(Array.isArray(contractsData) ? contractsData : []);
+        setProjects(Array.isArray(projectsData) ? projectsData : []);
 
-    <PageHeader lang={lang} titleAr="لوحة التحكم" titleEn="Freelancer Dashboard" subAr="تابع دخلك، مشاريعك، عروضك، وأداء ملفك من مكان واحد." subEn="Track your income, projects, proposals, and profile performance in one place." />
-    <div className="stats-grid"><Stat lang={lang} icon={CircleDollarSign} labelAr="الرصيد المتاح" labelEn="Available Balance" value="$4,250" delta="+14.2%"/><Stat lang={lang} icon={ShieldCheck} labelAr="المحجوز بالضمان" labelEn="In Escrow" value="$1,850" delta="+8.4%" tone="amber"/><Stat lang={lang} icon={BriefcaseBusiness} labelAr="العقود النشطة" labelEn="Active Contracts" value="3" delta="+1" tone="green"/><Stat lang={lang} icon={Star} labelAr="متوسط التقييم" labelEn="Average Rating" value="4.9 / 5" delta="+0.2" tone="purple"/></div>
-    <div className="grid-2-1"><Card><div className="card-head"><div><h3>{t(lang,'الأداء والدخل','Performance & Income')}</h3><p>{t(lang,'تحليل النشاط خلال الفترة المحددة','Activity for the selected period')}</p></div><span className="badge-soft blue">30 {t(lang,'يوم','days')}</span></div><div className="chart"><div className="y-labels"><span>$2k</span><span>$1k</span><span>$0</span></div><div className="bars">{[45,64,50,76,59,68,58,83,72,88,77,91].map((h,i)=><div className="bar-wrap" key={i}><div className="bar" style={{height:`${h}%`}}/><span>{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]}</span></div>)}</div></div></Card><Card><div className="card-head"><div><h3>{t(lang,'إكمال الملف','Profile Completion')}</h3><p>{t(lang,'حسّن ظهورك للعملاء','Improve your discoverability')}</p></div><span className="score">92%</span></div><div className="ring-wrap"><div className="ring"><div><b>92%</b><small>{t(lang,'مكتمل','Complete')}</small></div></div></div><div className="check-list"><div><Check size={14}/>{t(lang,'التخصص والمهارات','Specialty & skills')}</div><div><Check size={14}/>{t(lang,'4 أعمال في المحفظة','4 portfolio items')}</div><div><Check size={14}/>{t(lang,'وصف احترافي','Professional bio')}</div>
-    
-    <button className="link-btn" onClick={()=>navigate('profile')}>
-    {t(lang,'إكمال الملف','Complete profile')} <ArrowLeft size={13}/></button></div></Card></div>
-    <div className="grid-2"><Card><div className="card-head"><div><h3>{t(lang,'العقود النشطة','Active Contracts')}</h3><p>{t(lang,'العقود الحالية ومواعيد التسليم','Current contracts and delivery dates')}</p></div></div>{[['تصميم تجربة مستخدم لتطبيق العقارات','Property app UX redesign','Maryam Al-Saleh','$700','2026-09-28',68],['لوحة تحكم تحليلات SaaS','SaaS analytics dashboard','North Star','$520','2026-10-03',42],['تطوير Landing Page','Landing page development','Nexa Media','$320','2026-10-06',21]].map(r=><div className="contract-row" key={r[3]}><div className="avatar-text"><img src={img.clientA}/><div><b>{t(lang,r[0],r[1])}</b><small>{r[2]}</small></div></div><div><strong>{r[3]}</strong><small>{r[4]}</small></div><div className="progress"><div><span style={{width:`${r[5]}%`}}/></div><small>{r[5]}%</small></div></div>)}</Card><Card><div className="card-head"><div><h3>{t(lang,'مشاريع مقترحة','Recommended Projects')}</h3><p>{t(lang,'مطابقة مبنية على مهاراتك وأعمالك السابقة','Matched to your skills and portfolio')}</p></div></div>{projects.slice(0,3).map(p=><div className="recommend" key={p.id}><div className="match">{p.match}%<small>{t(lang,'مطابقة','Match')}</small></div><div className="recommend-main"><b>{t(lang,p.titleAr,p.titleEn)}</b><span>{p.budget} · {p.duration}</span><div className="tag-row">{p.skills.slice(0,2).map(s=><span className="tag" key={s}>{s}</span>)}</div></div></div>)}</Card></div>
-  </>;
+        if (profileId != null) {
+          try {
+            const profileData = await freelancerGet(`/freelancers/${profileId}`);
+            if (!cancelled) setProfile(profileData);
+          } catch {
+            if (!cancelled) setProfile(null);
+          }
+        }
+
+        try {
+          const advanced = await freelancerGet('/freelancers/me/statistics');
+          if (!cancelled) {
+            setStats(advanced);
+            setStatsNote(null);
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setStats(null);
+            setStatsNote(
+              err?.status === 403
+                ? t(
+                    lang,
+                    'الإحصاءات المتقدمة متاحة لمشتركي Freelancer Pro.',
+                    'Advanced statistics require Freelancer Pro.',
+                  )
+                : null,
+            );
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            errorMessage(err, t(lang, 'تعذر تحميل لوحة التحكم', 'Failed to load dashboard')),
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lang]);
+
+  const activeContracts = contracts.filter((c) => c.status === 'in_progress');
+  const rating =
+    profile?.rating_avg != null ? Number(profile.rating_avg).toFixed(1) : '—';
+
+  return (
+    <>
+      <PageHeader
+        lang={lang}
+        titleAr="لوحة التحكم"
+        titleEn="Freelancer Dashboard"
+        subAr="تابع دخلك، مشاريعك، وعقودك من بيانات النظام."
+        subEn="Track income, projects, and contracts from live system data."
+      />
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && <Card><p className="notice amber">{error}</p></Card>}
+      {!loading && !error && (
+        <>
+          <div className="stats-grid">
+            <Stat
+              lang={lang}
+              icon={CircleDollarSign}
+              labelAr="الرصيد المتاح"
+              labelEn="Available Balance"
+              value={formatMoney(wallet?.balance)}
+            />
+            <Stat
+              lang={lang}
+              icon={ShieldCheck}
+              labelAr="المحجوز بالضمان"
+              labelEn="In Escrow"
+              value={formatMoney(wallet?.escrow_balance)}
+              tone="amber"
+            />
+            <Stat
+              lang={lang}
+              icon={BriefcaseBusiness}
+              labelAr="العقود النشطة"
+              labelEn="Active Contracts"
+              value={String(activeContracts.length)}
+              tone="green"
+            />
+            <Stat
+              lang={lang}
+              icon={Star}
+              labelAr="متوسط التقييم"
+              labelEn="Average Rating"
+              value={rating === '—' ? '—' : `${rating} / 5`}
+              tone="purple"
+            />
+          </div>
+
+          {statsNote && <p className="notice amber">{statsNote}</p>}
+          {stats && (
+            <Card>
+              <div className="card-head">
+                <div>
+                  <h3>{t(lang, 'إحصاءات Pro', 'Pro Statistics')}</h3>
+                  <p>{t(lang, 'من اشتراك Freelancer Pro', 'From Freelancer Pro')}</p>
+                </div>
+              </div>
+              <div className="mini-stats">
+                <span>
+                  {t(lang, 'إجمالي الأرباح', 'Total earnings')}:{' '}
+                  {formatMoney(stats.total_earnings)}
+                </span>
+                <span>
+                  {t(lang, 'العقود', 'Contracts')}: {stats.total_contracts}
+                </span>
+                <span>
+                  {t(lang, 'قبول العروض', 'Acceptance')}:{' '}
+                  {stats.proposal_acceptance_rate}%
+                </span>
+              </div>
+            </Card>
+          )}
+
+          <div className="grid-2">
+            <Card>
+              <div className="card-head">
+                <div>
+                  <h3>{t(lang, 'العقود النشطة', 'Active Contracts')}</h3>
+                  <p>{t(lang, 'من قاعدة البيانات', 'From the database')}</p>
+                </div>
+              </div>
+              {activeContracts.length === 0 && (
+                <p>{t(lang, 'لا توجد عقود نشطة', 'No active contracts')}</p>
+              )}
+              {activeContracts.slice(0, 5).map((c) => (
+                <div className="contract-row" key={c.id}>
+                  <div className="avatar-text">
+                    <div>
+                      <b>
+                        {t(lang, 'عقد', 'Contract')} #{c.id}
+                      </b>
+                      <small>
+                        {t(lang, 'مشروع', 'Project')} #{c.project_id}
+                      </small>
+                    </div>
+                  </div>
+                  <div>
+                    <strong>{formatMoney(c.contract_value)}</strong>
+                    <small>{c.status}</small>
+                  </div>
+                </div>
+              ))}
+              <button className="link-btn" type="button" onClick={() => navigate('workspace')}>
+                {t(lang, 'فتح مساحة العمل', 'Open workspace')} <ArrowLeft size={13} />
+              </button>
+            </Card>
+            <Card>
+              <div className="card-head">
+                <div>
+                  <h3>{t(lang, 'مشاريع مفتوحة', 'Open Projects')}</h3>
+                  <p>{t(lang, 'متاحة للتقديم', 'Available to bid')}</p>
+                </div>
+              </div>
+              {projects.slice(0, 3).map((p) => (
+                <div className="recommend" key={p.id}>
+                  <div className="recommend-main">
+                    <b>{p.title}</b>
+                    <span>
+                      {formatMoney(p.budget_min)} – {formatMoney(p.budget_max)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {projects.length === 0 && (
+                <p>{t(lang, 'لا توجد مشاريع مفتوحة', 'No open projects')}</p>
+              )}
+              <button className="link-btn" type="button" onClick={() => navigate('projects')}>
+                {t(lang, 'تصفح المشاريع', 'Browse projects')} <ArrowLeft size={13} />
+              </button>
+            </Card>
+          </div>
+
+          <Card>
+            <div className="card-head">
+              <div>
+                <h3>{t(lang, 'الملف', 'Profile')}</h3>
+                <p>{user?.name || '—'}</p>
+              </div>
+              <button className="link-btn" type="button" onClick={() => navigate('profile')}>
+                {t(lang, 'إدارة الملف', 'Manage profile')} <ArrowLeft size={13} />
+              </button>
+            </div>
+          </Card>
+        </>
+      )}
+    </>
+  );
 }

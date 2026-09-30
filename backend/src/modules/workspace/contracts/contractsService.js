@@ -1,8 +1,14 @@
 import { AppError } from '../../../utils/appError.js';
+import {
+  AWAITING_ESCROW,
+  assertEscrowFunded,
+} from '../../wallet/escrow.js';
 import { findClientProfileByUserId } from '../../projects/projectsPersistence.js';
 import { findFreelancerProfileByUserId } from '../../proposals/proposalsPersistence.js';
 import {
   findContractById,
+  listContractsByClientId,
+  listContractsByFreelancerId,
   updateContractStatusById as updateContractStatusRow,
 } from './contractsPersistence.js';
 
@@ -47,6 +53,32 @@ const assertContractParticipant = async (contract, actor) => {
   throw new AppError('Forbidden: insufficient role', 403);
 };
 
+export const listContractsForActor = async (actor) => {
+  if (actor?.role === 'client') {
+    const profile = await findClientProfileByUserId(actor.id);
+
+    if (!profile) {
+      return [];
+    }
+
+    const rows = await listContractsByClientId(profile.id);
+    return rows.map(toPublicContract);
+  }
+
+  if (actor?.role === 'freelancer') {
+    const profile = await findFreelancerProfileByUserId(actor.id);
+
+    if (!profile) {
+      return [];
+    }
+
+    const rows = await listContractsByFreelancerId(profile.id);
+    return rows.map(toPublicContract);
+  }
+
+  throw new AppError('Forbidden: insufficient role', 403);
+};
+
 export const getContractById = async (contractId, actor) => {
   const contract = await findContractById(contractId);
   requireContract(contract);
@@ -58,6 +90,17 @@ export const updateContractStatusById = async (contractId, actor, payload) => {
   const contract = await findContractById(contractId);
   requireContract(contract);
   await assertContractParticipant(contract, actor);
+
+  if (contract.status === AWAITING_ESCROW) {
+    throw new AppError(
+      'Contract cannot change status until escrow is funded',
+      409,
+    );
+  }
+
+  if (payload.status === 'in_progress') {
+    await assertEscrowFunded(contractId);
+  }
 
   const updated = await updateContractStatusRow(contractId, payload.status);
   return requireContract(updated);

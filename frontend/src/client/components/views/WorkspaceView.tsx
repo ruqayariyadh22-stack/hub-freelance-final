@@ -30,7 +30,7 @@ interface WorkspaceViewProps {
   onRejectScopeChange: (contractId: string, scopeChangeId: string) => void;
   onToggleTaskStatus: (contractId: string, taskId: string) => void;
   onAddTask: (contractId: string, task: Omit<TaskItem, 'id' | 'contractId'>) => void;
-  onSendMessage: (contractId: string, messageText: string, attachmentName?: string) => void;
+  onSendMessage: (conversationId: string, messageText: string) => void;
   onReleaseEscrow: (contractId: string) => void;
   onOpenDispute: (contractId: string) => void;
   onOpenReviewModal: (contract: Contract) => void;
@@ -77,7 +77,11 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    onSendMessage(currentContract.id, chatInput.trim());
+    if (currentContract.conversationId) {
+      onSendMessage(currentContract.conversationId, chatInput.trim());
+    } else if (!/^\d+$/.test(currentContract.id)) {
+      onSendMessage(currentContract.id, chatInput.trim());
+    }
     setChatInput('');
   };
 
@@ -96,6 +100,9 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   };
 
   const pendingScopeChanges = currentContract.scopeChanges.filter((sc) => sc.status === 'pending');
+  const isRealBackendContract = /^\d+$/.test(currentContract.id);
+  const deliverableNotes = isRealBackendContract ? undefined : currentContract.deliverableNotes;
+  const deliverableFiles = isRealBackendContract ? undefined : currentContract.deliverableFiles;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -539,22 +546,22 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 {isArabic ? 'ملاحظات المستقل عند التسليم:' : 'Freelancer Delivery Notes:'}
               </span>
               <span className="text-[11px] text-slate-400">
-                {currentContract.deliverableFiles?.length || 0} {isArabic ? 'ملفات مرفقة' : 'files attached'}
+                {deliverableFiles?.length || 0} {isArabic ? 'ملفات مرفقة' : 'files attached'}
               </span>
             </div>
 
             <p className="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 leading-relaxed">
-              {currentContract.deliverableNotes || (isArabic ? 'لم يتم إرفاق ملاحظات تسليم بعد.' : 'No notes yet.')}
+              {deliverableNotes || (isArabic ? 'لم يتم إرفاق ملاحظات تسليم بعد.' : 'No notes yet.')}
             </p>
 
             {/* Files List */}
-            {currentContract.deliverableFiles && currentContract.deliverableFiles.length > 0 && (
+            {deliverableFiles && deliverableFiles.length > 0 && (
               <div className="space-y-2">
                 <span className="text-[11px] font-bold text-slate-600 block">
                   {isArabic ? 'الملفات المرفوعة للتحميل والمعاينة:' : 'Downloadable Assets:'}
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {currentContract.deliverableFiles.map((file, i) => (
+                  {deliverableFiles.map((file, i) => (
                     <div
                       key={i}
                       className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-blue-300 transition-colors"
@@ -596,7 +603,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {currentContract.status === 'completed' ? (
+              {!isRealBackendContract && currentContract.status === 'completed' ? (
                 <button
                   onClick={() => onOpenReviewModal(currentContract)}
                   className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5"
@@ -606,13 +613,25 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 </button>
               ) : (
                 <>
-                  <button
-                    onClick={() => onReleaseEscrow(currentContract.id)}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 active:scale-95"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{isArabic ? 'اعتماد العمل وتحرير الدفعة' : 'Approve & Release Funds'}</span>
-                  </button>
+                  {currentContract.paymentStatus !== 'released' && (
+                    <button
+                      onClick={() => onReleaseEscrow(currentContract.id)}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 active:scale-95"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{isArabic ? 'اعتماد العمل وتحرير الدفعة' : 'Approve & Release Funds'}</span>
+                    </button>
+                  )}
+
+                  {isRealBackendContract && (
+                    <button
+                      onClick={() => onOpenReviewModal(currentContract)}
+                      className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{isArabic ? 'تقييم المستقل ★' : 'Rate Freelancer'}</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => onOpenDispute(currentContract.id)}
@@ -687,7 +706,14 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
           <form onSubmit={handleSendChat} className="p-3 border-t border-slate-200 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onSendMessage(currentContract.id, isArabic ? 'مرفق ملف توضيحي جديد' : 'Attached supplementary doc', 'specs_v2.pdf')}
+              onClick={() => {
+                if (currentContract.conversationId) {
+                  return;
+                }
+                if (!/^\d+$/.test(currentContract.id)) {
+                  onSendMessage(currentContract.id, isArabic ? 'مرفق ملف توضيحي جديد' : 'Attached supplementary doc');
+                }
+              }}
               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors"
               title={isArabic ? 'إرفاق ملف' : 'Attach file'}
             >

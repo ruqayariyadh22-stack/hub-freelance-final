@@ -15,7 +15,13 @@ export interface ClientProfile {
   accountStatus: 'active' | 'disabled';
 }
 
-export type ProjectStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled';
+export type ProjectStatus =
+  | 'draft'
+  | 'open'
+  | 'pending_approval'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
 
 export interface Project {
   id: string;
@@ -36,13 +42,15 @@ export interface Project {
 }
 
 export interface AiMatchingBreakdown {
-  overallScore: number; // e.g. 96
-  skillsMatch: number; // e.g. 98
-  experienceMatch: number; // e.g. 92
-  specialtyMatch: number; // e.g. 95
-  portfolioRelevance: number; // e.g. 94
+  overallScore: number;
+  skillsMatch: number;
+  experienceMatch: number;
+  specialtyMatch: number;
+  portfolioRelevance: number;
+  ratingsMatch: number;
   aiRecommendation: string;
   aiPros: string[];
+  explanation?: string;
 }
 
 export interface Proposal {
@@ -60,7 +68,7 @@ export interface Proposal {
   coverLetter: string;
   status: 'pending' | 'accepted' | 'rejected';
   submittedAt: string;
-  aiMatching: AiMatchingBreakdown;
+  aiMatching: AiMatchingBreakdown | null;
 }
 
 export interface TaskItem {
@@ -115,9 +123,10 @@ export interface Contract {
   escrowHeld: number;
   commission: number;
   status: 'in_progress' | 'delivered' | 'completed' | 'cancelled';
-  paymentStatus: 'escrow_held' | 'released' | 'refunded';
+  paymentStatus: 'pending' | 'released' | 'refunded' | 'escrow_held';
   startDate: string;
-  deliveryDate: string;
+  deliveryDate: string | null;
+  conversationId?: string;
   deliverableNotes?: string;
   deliverableFiles?: string[];
   tasks: TaskItem[];

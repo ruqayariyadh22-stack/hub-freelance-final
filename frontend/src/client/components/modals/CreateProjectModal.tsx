@@ -2,13 +2,9 @@ import React, { useState } from 'react';
 import {
   FolderPlus,
   Sparkles,
-  DollarSign,
-  Calendar,
-  Layers,
   Wand2,
   CheckCircle2,
-  X,
-  FileText
+  X
 } from 'lucide-react';
 import { Project } from '../../types';
 
@@ -31,49 +27,87 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [budgetMax, setBudgetMax] = useState(1200);
   const [durationDays, setDurationDays] = useState(15);
   const [skillsInput, setSkillsInput] = useState('React, Tailwind CSS, TypeScript');
-  const [rawIdea, setRawIdea] = useState('');
+  const [idea, setIdea] = useState('');
   const [description, setDescription] = useState('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // AI Description Assistant simulation (from PDF Section 6 & 14)
-  const handleGenerateAiDescription = () => {
+  const parseSkills = () =>
+    skillsInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const handleGenerateAiDescription = async () => {
+    const token = localStorage.getItem('hub_token');
+    if (!token) {
+      setAiError(isArabic ? 'يجب تسجيل الدخول أولاً' : 'Authentication required');
+      return;
+    }
+
+    const requiredSkills = parseSkills();
+    if (!idea.trim()) {
+      setAiError(isArabic ? 'يرجى إدخال فكرة المشروع أولاً' : 'Please enter the project idea first');
+      return;
+    }
+    if (requiredSkills.length === 0) {
+      setAiError(isArabic ? 'يرجى إدخال مهارة واحدة على الأقل' : 'Please enter at least one required skill');
+      return;
+    }
+
     setIsGeneratingAi(true);
-    setTimeout(() => {
-      const generated = isArabic
-        ? `[نطاق العمل ومواصفات المشروع - صياغة الذكاء الاصطناعي]:
-نبحث عن محترف متخصص في مجالات (${category}) لتنفيذ المشروع بكفاءة وأعلى معايير الجودة البرمجية.
+    setAiError(null);
 
-■ المخرجات والمهام المطلوبة (Scope of Work):
-1. بناء وتطوير الواجهات الرئيسية المتجاوبة مع كافة مقاسات الشاشات والهواتف الذكية.
-2. الالتزام بالتقنيات المطلوبة: ${skillsInput}.
-3. ربط وتكامل واجهات برمجة التطبيقات (APIs) مع معالجة حالات الخطأ والتحميل بكفاءة.
-4. إجراء الفحص والاختبار الشامل للتأكد من خلو المشروع من أي أخطاء وثغرات برمجية.
-5. تسليم الكود البرمجي مع توثيق شامل لدليل التشغيل (Documentation).
+    try {
+      const response = await fetch('http://localhost:5000/api/ai/description-assistant', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          idea: idea.trim(),
+          budget_min: Number(budgetMin),
+          budget_max: Number(budgetMax),
+          duration_days: Number(durationDays),
+          required_skills: requiredSkills
+        })
+      });
 
-■ الشروط الفنية والتسليم:
-- الميزانية المرصودة: $${budgetMin} - $${budgetMax}
-- مدة الإنجاز القصوى: ${durationDays} يوماً
-- المتابعة الدورية عبر مساحة العمل وتحديث قائمة المهام أسبوعياً.`
-        : `[Project Scope of Work - Formulated by AI Assistant]:
-We are seeking an expert specialized in ${category} to deliver this project with high standards of craftsmanship and code performance.
+      let payload: { success?: boolean; message?: string; data?: { description?: string } } | null =
+        null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
 
-■ Key Deliverables & Responsibilities:
-1. Develop responsive, performant views matching modern UX best practices.
-2. Leverage the required core stack: ${skillsInput}.
-3. Implement clean state management, modular architecture, and API integration.
-4. Comprehensive QA, cross-browser compatibility, and speed optimization.
-5. Complete codebase handoff with clear documentation and deployment setup.
+      if (!response.ok || !payload?.success || typeof payload.data?.description !== 'string') {
+        const message =
+          payload?.message ||
+          (response.status === 403
+            ? isArabic
+              ? 'هذه الميزة مدفوعة وتتطلب صلاحية مدفوعة'
+              : 'This is a paid feature and requires entitlement'
+            : response.status === 401
+              ? isArabic
+                ? 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً'
+                : 'Session expired. Please sign in again.'
+              : isArabic
+                ? 'تعذر توليد الوصف'
+                : 'Unable to generate description');
+        setAiError(message);
+        return;
+      }
 
-■ Project Constraints:
-- Budget Range: $${budgetMin} - $${budgetMax}
-- Timeline: ${durationDays} days
-- Communication: Regular sprint syncs through Hub Freelance Workspace.`;
-
-      setDescription(generated);
+      setDescription(payload.data.description);
+    } catch {
+      setAiError(isArabic ? 'تعذر الاتصال بالخادم' : 'Unable to reach the server');
+    } finally {
       setIsGeneratingAi(false);
-    }, 900);
+    }
   };
 
   const handleSubmit = (status: 'open' | 'draft') => {
@@ -82,10 +116,7 @@ We are seeking an expert specialized in ${category} to deliver this project with
       return;
     }
 
-    const skills = skillsInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const skills = parseSkills();
 
     onSaveProject({
       title: title.trim(),
@@ -106,7 +137,6 @@ We are seeking an expert specialized in ${category} to deliver this project with
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-        {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
@@ -129,9 +159,7 @@ We are seeking an expert specialized in ${category} to deliver this project with
           </button>
         </div>
 
-        {/* Scrollable Modal Content */}
         <div className="space-y-4 overflow-y-auto flex-1 pe-1 text-xs">
-          {/* Title */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">
               {isArabic ? 'عنوان المشروع' : 'Project Title'} *
@@ -146,7 +174,23 @@ We are seeking an expert specialized in ${category} to deliver this project with
             />
           </div>
 
-          {/* Category & Duration */}
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              {isArabic ? 'فكرة المشروع' : 'Project Idea'} *
+            </label>
+            <textarea
+              rows={3}
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              placeholder={
+                isArabic
+                  ? 'اكتب فكرتك الأساسية باختصار قبل توليد الوصف...'
+                  : 'Write your rough idea before generating a description...'
+              }
+              className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none resize-none"
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="font-bold text-slate-700 block mb-1">
@@ -178,7 +222,6 @@ We are seeking an expert specialized in ${category} to deliver this project with
             </div>
           </div>
 
-          {/* Budget Min and Max */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-bold text-slate-700 block mb-1">
@@ -206,7 +249,6 @@ We are seeking an expert specialized in ${category} to deliver this project with
             </div>
           </div>
 
-          {/* Required Skills */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">
               {isArabic ? 'المهارات المطلوبة (مفصولة بفاصلة)' : 'Required Skills (comma separated)'}
@@ -220,7 +262,6 @@ We are seeking an expert specialized in ${category} to deliver this project with
             />
           </div>
 
-          {/* AI Assistant Section (Feature described in PDF Page 14) */}
           <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 p-4 rounded-2xl border border-purple-200 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-extrabold text-purple-900 text-xs">
@@ -234,17 +275,27 @@ We are seeking an expert specialized in ${category} to deliver this project with
                 className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-sm transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
               >
                 <Wand2 className="w-3.5 h-3.5" />
-                <span>{isGeneratingAi ? (isArabic ? 'جاري التوليد...' : 'Generating...') : (isArabic ? 'توليد صياغة احترافية' : 'Generate with AI')}</span>
+                <span>
+                  {isGeneratingAi
+                    ? isArabic
+                      ? 'جاري التوليد...'
+                      : 'Generating...'
+                    : isArabic
+                      ? 'توليد صياغة احترافية'
+                      : 'Generate with AI'}
+                </span>
               </button>
             </div>
             <p className="text-[11px] text-purple-800 leading-relaxed">
               {isArabic
-                ? 'اضغط زر التوليد لتحويل أفكارك ومهامك إلى وثيقة نطاق عمل (Scope of Work) احترافية تزيد من دقة عروض المستقلين.'
-                : 'Turn rough requirements into a professional scope of work that attracts top tier proposals.'}
+                ? 'اضغط زر التوليد لتحويل فكرتك والميزانية والمدة والمهارات إلى وصف مشروع احترافي قابل للمراجعة قبل النشر.'
+                : 'Generate a professional project description from your idea, budget, duration, and skills. You can edit it before publishing.'}
             </p>
+            {aiError && (
+              <p className="text-[11px] font-bold text-red-600">{aiError}</p>
+            )}
           </div>
 
-          {/* Project Detailed Description */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">
               {isArabic ? 'وصف ونطاق عمل المشروع' : 'Project Scope & Requirements'} *
@@ -253,14 +304,17 @@ We are seeking an expert specialized in ${category} to deliver this project with
               rows={6}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={isArabic ? 'اكتب تفاصيل المشروع أو استخدم المساعد الذكي بالأعلى...' : 'Write detailed requirements or generate with AI above...'}
+              placeholder={
+                isArabic
+                  ? 'اكتب تفاصيل المشروع أو استخدم المساعد الذكي بالأعلى...'
+                  : 'Write detailed requirements or generate with AI above...'
+              }
               className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none leading-relaxed resize-none font-sans"
               required
             />
           </div>
         </div>
 
-        {/* Modal Actions */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
           <button
             type="button"

@@ -1,236 +1,334 @@
-import React,{useMemo,useState} from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Clock3, Filter, Send } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { projects, img } from '../freelance-data';
-import { Card, PageHeader } from '../components/freelance-UI';
+import { Card, Empty, PageHeader } from '../components/freelance-UI';
+import {
+  errorMessage,
+  formatMoney,
+  freelancerGet,
+  freelancerPost,
+} from '../api';
 
-export default function Projects({lang,notify}){
+export default function Projects({ lang, notify }) {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('All');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [filterBudget, setFilterBudget] = useState('All');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [proposalPrice, setProposalPrice] = useState('');
+  const [proposalDuration, setProposalDuration] = useState('');
+  const [proposalMessage, setProposalMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await freelancerGet('/projects');
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'تعذر تحميل المشاريع', 'Failed to load projects')));
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const [q,setQ]=useState('');
-const [cat,setCat]=useState('All');
-const [showFilters,setShowFilters]=useState(false);
-const [filterCategory,setFilterCategory]=useState('All');
-const [filterBudget,setFilterBudget]=useState('All');
-const [selectedProject,setSelectedProject]=useState(null);
-const [proposalPrice,setProposalPrice]=useState('');
-const [proposalDuration,setProposalDuration]=useState('');
-const [proposalMessage,setProposalMessage]=useState('');
-const list=useMemo(()=>projects.filter(p=>{
-  const matchesCategory =
-    (cat==='All'||p.category===cat) &&
-    (filterCategory==='All'||p.category===filterCategory);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const budget = Number(String(p.budget).replace(/[^0-9]/g,''));
+  const categories = useMemo(() => {
+    const set = new Set(projects.map((p) => p.category).filter(Boolean));
+    return ['All', ...Array.from(set)];
+  }, [projects]);
 
-  const matchesBudget =
-    filterBudget==='All' ||
-    (filterBudget==='under100' && budget < 100) ||
-    (filterBudget==='100-500' && budget >= 100 && budget <= 500) ||
-    (filterBudget==='over500' && budget > 500);
+  const list = useMemo(
+    () =>
+      projects.filter((p) => {
+        const matchesCategory =
+          (cat === 'All' || p.category === cat) &&
+          (filterCategory === 'All' || p.category === filterCategory);
+        const budgetMax = Number(p.budget_max ?? p.budget_min ?? 0);
+        const matchesBudget =
+          filterBudget === 'All' ||
+          (filterBudget === 'under100' && budgetMax < 100) ||
+          (filterBudget === '100-500' && budgetMax >= 100 && budgetMax <= 500) ||
+          (filterBudget === 'over500' && budgetMax > 500);
+        const haystack = `${p.title || ''} ${p.description || ''} ${(p.required_skills || []).join(' ')}`.toLowerCase();
+        const matchesSearch = haystack.includes(q.toLowerCase());
+        return matchesCategory && matchesBudget && matchesSearch;
+      }),
+    [projects, q, cat, filterCategory, filterBudget],
+  );
 
-  const matchesSearch =
-    `${p.titleAr} ${p.titleEn} ${p.skills.join(' ')}`
-      .toLowerCase()
-      .includes(q.toLowerCase());
+  const openProposal = (project) => {
+    setSelectedProject(project);
+    setProposalPrice('');
+    setProposalDuration('');
+    setProposalMessage('');
+    setSubmitError(null);
+  };
 
-  return matchesCategory && matchesBudget && matchesSearch;
-}),[q,cat,filterCategory,filterBudget]);
- 
- return <>
-  <PageHeader lang={lang} titleAr="تصفح المشاريع" titleEn="Browse Projects" subAr="ابحث عن المشاريع المناسبة وأرسل عروضك للعملاء." subEn="Find suitable projects and submit proposals to clients."/>
-  <div className="toolbar"><div className="input-search"><span>⌕</span><input value={q} onChange={e=>setQ(e.target.value)} placeholder={t(lang,'ابحث عن مشروع أو مهارة...','Search projects or skills...')}/></div><div className="filters">{['All','Development','Design','Writing','Marketing'].map(c=><button key={c} onClick={()=>setCat(c)} className={cat===c?'selected':''}>{c==='All'?t(lang,'الكل','All'):c}</button>)}
-  <button
-  className="filter-btn"
-  onClick={() => setShowFilters(true)}
->
-  <Filter size={14}/>
-  {t(lang,'فلاتر','Filters')}
-</button>
-  </div></div>
-  <div className="project-stack">{list.map(p=><Card key={p.id} className="project-card"><div className="project-top"><div><span className="badge-soft blue">{p.category}</span><h3>{t(lang,p.titleAr,p.titleEn)}</h3><p>{t(lang,p.descriptionAr,p.descriptionEn)}</p></div><div className="project-meta"><strong>{p.budget}</strong><span><Clock3 size={13}/>{p.duration}</span><span>{p.proposals} {t(lang,'عروض','proposals')}</span></div></div><div className="tag-row">{p.skills.map(s=><span className="tag" key={s}>{s}</span>)}</div><div className="project-footer"><div className="client"><img src={img.clientB}/><div><b>{p.client}</b><small>{t(lang,'عميل موثّق · نشر حديثاً','Verified client · recently published')}</small></div></div><div className="project-actions">
-    
-    <button className="primary" onClick={()=>setSelectedProject(p)}>
-  <Send size={14}/>
-  {t(lang,'إرسال عرض','Submit Proposal')}
-</button>
-
-    </div></div></Card>)}</div>
-{showFilters && (
-  <div className="proposal-overlay">
-    <div className="proposal-modal">
-
-      <button
-        className="proposal-close"
-        onClick={() => setShowFilters(false)}
-      >
-        ×
-      </button>
-
-      <h2>
-        {t(lang, 'الفلاتر المتقدمة', 'Advanced Filters')}
-      </h2>
-
-      <p className="proposal-project-title">
-        {t(
+  const submitProposal = async () => {
+    if (!selectedProject || submitting) return;
+    const price = Number(String(proposalPrice).replace(/[^0-9.]/g, ''));
+    const duration = Number(String(proposalDuration).replace(/[^0-9]/g, ''));
+    if (!price || price <= 0 || !Number.isInteger(duration) || duration <= 0) {
+      setSubmitError(
+        t(
           lang,
-          'اختاري الخيارات المناسبة للمشاريع التي تريدين رؤيتها.',
-          'Choose the options for the projects you want to see.'
-        )}
-      </p>
+          'أدخل سعراً أكبر من صفر ومدة بعدد أيام صحيحة',
+          'Enter a price greater than 0 and a valid duration in days',
+        ),
+      );
+      return;
+    }
 
-      <div className="proposal-field">
-        <label>
-          {t(lang, 'نوع المشروع', 'Project Type')}
-        </label>
-        <select
-  value={filterCategory}
-  onChange={e => setFilterCategory(e.target.value)}
->
-  <option value="All">{t(lang, 'الكل', 'All')}</option>
-  <option value="Development">Development</option>
-  <option value="Design">Design</option>
-  <option value="Writing">Writing</option>
-  <option value="Marketing">Marketing</option>
-</select>
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await freelancerPost(`/projects/${selectedProject.id}/proposals`, {
+        proposed_price: price,
+        proposed_duration: duration,
+        message: proposalMessage.trim() || null,
+      });
+      notify(t(lang, 'تم إرسال العرض بنجاح', 'Proposal submitted successfully'));
+      setSelectedProject(null);
+    } catch (err) {
+      setSubmitError(errorMessage(err, t(lang, 'فشل إرسال العرض', 'Failed to submit proposal')));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        lang={lang}
+        titleAr="تصفح المشاريع"
+        titleEn="Browse Projects"
+        subAr="ابحث عن المشاريع المناسبة وأرسل عروضك للعملاء."
+        subEn="Find suitable projects and submit proposals to clients."
+      />
+      <div className="toolbar">
+        <div className="input-search">
+          <span>⌕</span>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t(lang, 'ابحث عن مشروع أو مهارة...', 'Search projects or skills...')}
+          />
+        </div>
+        <div className="filters">
+          {categories.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCat(c)}
+              className={cat === c ? 'selected' : ''}
+            >
+              {c === 'All' ? t(lang, 'الكل', 'All') : c}
+            </button>
+          ))}
+          <button className="filter-btn" type="button" onClick={() => setShowFilters(true)}>
+            <Filter size={14} />
+            {t(lang, 'فلاتر', 'Filters')}
+          </button>
+        </div>
       </div>
 
-      <div className="proposal-field">
-        <label>
-          {t(lang, 'الميزانية', 'Budget')}
-        </label>
-<select
-  value={filterBudget}
-  onChange={e => setFilterBudget(e.target.value)}
->
-  <option value="All">
-    {t(lang, 'كل الميزانيات', 'All Budgets')}
-  </option>
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && (
+        <Card>
+          <p className="notice amber">{error}</p>
+          <button className="primary" type="button" onClick={load}>
+            {t(lang, 'إعادة المحاولة', 'Retry')}
+          </button>
+        </Card>
+      )}
+      {!loading && !error && list.length === 0 && (
+        <Empty
+          lang={lang}
+          titleAr="لا توجد مشاريع مفتوحة"
+          titleEn="No open projects"
+          bodyAr="لا توجد مشاريع مفتوحة مطابقة حالياً."
+          bodyEn="There are no matching open projects right now."
+        />
+      )}
 
-  <option value="under100">Under $100</option>
-  <option value="100-500">$100 - $500</option>
-  <option value="over500">Over $500</option>
-</select>
-        
+      <div className="project-stack">
+        {list.map((p) => (
+          <Card key={p.id} className="project-card">
+            <div className="project-top">
+              <div>
+                <span className="badge-soft blue">{p.category || '—'}</span>
+                <h3>{p.title}</h3>
+                <p>{p.description}</p>
+              </div>
+              <div className="project-meta">
+                <strong>
+                  {formatMoney(p.budget_min)} – {formatMoney(p.budget_max)}
+                </strong>
+                <span>
+                  <Clock3 size={13} />
+                  {p.duration != null
+                    ? `${p.duration} ${t(lang, 'يوم', 'days')}`
+                    : '—'}
+                </span>
+                <span>{p.status}</span>
+              </div>
+            </div>
+            <div className="tag-row">
+              {(p.required_skills || []).map((s) => (
+                <span className="tag" key={s}>
+                  {s}
+                </span>
+              ))}
+            </div>
+            <div className="project-footer">
+              <div className="client">
+                <div>
+                  <b>#{p.id}</b>
+                  <small>
+                    {t(lang, 'مشروع مفتوح', 'Open project')}
+                    {p.published_at ? ` · ${String(p.published_at).slice(0, 10)}` : ''}
+                  </small>
+                </div>
+              </div>
+              <div className="project-actions">
+                <button className="primary" type="button" onClick={() => openProposal(p)}>
+                  <Send size={14} />
+                  {t(lang, 'إرسال عرض', 'Submit Proposal')}
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      <div className="proposal-actions">
+      {showFilters && (
+        <div className="proposal-overlay">
+          <div className="proposal-modal">
+            <button className="proposal-close" type="button" onClick={() => setShowFilters(false)}>
+              ×
+            </button>
+            <h2>{t(lang, 'الفلاتر المتقدمة', 'Advanced Filters')}</h2>
+            <div className="proposal-field">
+              <label>{t(lang, 'نوع المشروع', 'Project Type')}</label>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c === 'All' ? t(lang, 'الكل', 'All') : c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="proposal-field">
+              <label>{t(lang, 'الميزانية', 'Budget')}</label>
+              <select
+                value={filterBudget}
+                onChange={(e) => setFilterBudget(e.target.value)}
+              >
+                <option value="All">{t(lang, 'كل الميزانيات', 'All Budgets')}</option>
+                <option value="under100">Under $100</option>
+                <option value="100-500">$100 - $500</option>
+                <option value="over500">Over $500</option>
+              </select>
+            </div>
+            <div className="proposal-actions">
+              <button
+                className="proposal-cancel"
+                type="button"
+                onClick={() => {
+                  setFilterCategory('All');
+                  setFilterBudget('All');
+                  setShowFilters(false);
+                }}
+              >
+                {t(lang, 'إعادة ضبط', 'Reset')}
+              </button>
+              <button className="primary" type="button" onClick={() => setShowFilters(false)}>
+                {t(lang, 'تطبيق الفلاتر', 'Apply Filters')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-  <button
-    className="proposal-cancel"
-    onClick={() => {
-      setFilterCategory('All');
-      setFilterBudget('All');
-      setShowFilters(false);
-    }}
-  >
-    {t(lang, 'إعادة ضبط', 'Reset')}
-  </button>
-
-  <button
-    className="primary"
-    onClick={() => setShowFilters(false)}
-  >
-    {t(lang, 'تطبيق الفلاتر', 'Apply Filters')}
-  </button>
-
-</div>
-
-    </div>
-  </div>
-)}
-
-
-
-{selectedProject && (
-  <div className="proposal-overlay">
-    <div className="proposal-modal">
-
-      <button
-        className="proposal-close"
-        onClick={() => setSelectedProject(null)}
-      >
-        ×
-      </button>
-
-      <h2>
-        {t(lang, 'إرسال عرض للمشروع', 'Submit Proposal')}
-      </h2>
-
-      <p className="proposal-project-title">
-        {t(lang, selectedProject.titleAr, selectedProject.titleEn)}
-      </p>
-
-      <div className="proposal-field">
-        <label>
-          {t(lang, 'السعر المقترح', 'Your Price')}
-        </label>
-        <input
-  type="text"
-  value={proposalPrice}
-  onChange={e=>setProposalPrice(e.target.value)}
-  placeholder={t(lang, 'مثال: $500', 'Example: $500')}
-/>
-      </div>
-
-      <div className="proposal-field">
-        <label>
-          {t(lang, 'مدة التنفيذ', 'Delivery Time')}
-        </label>
-        <input
-  type="text"
-  value={proposalDuration}
-  onChange={e=>setProposalDuration(e.target.value)}
-  placeholder={t(lang, 'مثال: 7 أيام', 'Example: 7 days')}
-/>
-      </div>
-
-      <div className="proposal-field">
-        <label>
-          {t(lang, 'رسالتك للعميل', 'Message to Client')}
-        </label>
-        <textarea
-  rows="5"
-  value={proposalMessage}
-  onChange={e=>setProposalMessage(e.target.value)}
-  placeholder={t(
-    lang,
-    'اكتب نبذة عن خبرتك وكيف ستنفذ المشروع...',
-    'Write about your experience and how you will complete the project...'
-  )}
-/>
-      </div>
-
-      <div className="proposal-actions">
-        <button
-          className="proposal-cancel"
-          onClick={() => setSelectedProject(null)}
-        >
-          {t(lang, 'إلغاء', 'Cancel')}
-        </button>
-
-        <button
-          className="primary"
-          onClick={() => {
-            notify(
-              t(
-                lang,
-                'تم إرسال العرض بنجاح',
-                'Proposal submitted successfully'
-              )
-            );
-            setSelectedProject(null);
-          }}
-        >
-          <Send size={14} />
-          {t(lang, 'تأكيد إرسال العرض', 'Submit Proposal')}
-        </button>
-      </div>
-
-    </div>
-  </div>
-)}
-
- </>;
+      {selectedProject && (
+        <div className="proposal-overlay">
+          <div className="proposal-modal">
+            <button
+              className="proposal-close"
+              type="button"
+              onClick={() => !submitting && setSelectedProject(null)}
+            >
+              ×
+            </button>
+            <h2>{t(lang, 'إرسال عرض للمشروع', 'Submit Proposal')}</h2>
+            <p className="proposal-project-title">{selectedProject.title}</p>
+            {submitError && <p className="notice amber">{submitError}</p>}
+            <div className="proposal-field">
+              <label>{t(lang, 'السعر المقترح', 'Your Price')}</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={proposalPrice}
+                onChange={(e) => setProposalPrice(e.target.value)}
+                placeholder="500"
+                disabled={submitting}
+              />
+            </div>
+            <div className="proposal-field">
+              <label>{t(lang, 'مدة التنفيذ (أيام)', 'Delivery Time (days)')}</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={proposalDuration}
+                onChange={(e) => setProposalDuration(e.target.value)}
+                placeholder="7"
+                disabled={submitting}
+              />
+            </div>
+            <div className="proposal-field">
+              <label>{t(lang, 'رسالتك للعميل', 'Message to Client')}</label>
+              <textarea
+                rows="5"
+                value={proposalMessage}
+                onChange={(e) => setProposalMessage(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div className="proposal-actions">
+              <button
+                className="proposal-cancel"
+                type="button"
+                disabled={submitting}
+                onClick={() => setSelectedProject(null)}
+              >
+                {t(lang, 'إلغاء', 'Cancel')}
+              </button>
+              <button className="primary" type="button" disabled={submitting} onClick={submitProposal}>
+                <Send size={14} />
+                {submitting
+                  ? t(lang, 'جاري الإرسال...', 'Submitting...')
+                  : t(lang, 'تأكيد إرسال العرض', 'Submit Proposal')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
-

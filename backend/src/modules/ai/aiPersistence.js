@@ -3,6 +3,7 @@ import { query } from '../../config/db.js';
 const USAGE_COLUMNS = `
   id,
   user_id,
+  action,
   created_at
 `;
 
@@ -19,7 +20,8 @@ export const listUsageLogsByUserId = async (userId, executor = query) => {
     executor,
     `SELECT ${USAGE_COLUMNS}
      FROM ai_usage_logs
-     WHERE user_id = $1`,
+     WHERE user_id = $1
+     ORDER BY id DESC`,
     [userId],
   );
 
@@ -42,6 +44,24 @@ export const countUsageLogsForUserOnCurrentDate = async (
   return result.rows[0].usage_count;
 };
 
+export const countUsageLogsForUserActionInCurrentMonth = async (
+  userId,
+  action,
+  executor = query,
+) => {
+  const result = await runQuery(
+    executor,
+    `SELECT COUNT(*)::int AS usage_count
+     FROM ai_usage_logs
+     WHERE user_id = $1
+       AND action = $2
+       AND date_trunc('month', created_at) = date_trunc('month', CURRENT_TIMESTAMP)`,
+    [userId, action],
+  );
+
+  return result.rows[0].usage_count;
+};
+
 export const lockUserForAiUsage = async (userId, executor) => {
   const result = await runQuery(
     executor,
@@ -55,15 +75,19 @@ export const lockUserForAiUsage = async (userId, executor) => {
   return result.rows[0] || null;
 };
 
-export const insertUsageLog = async ({ userId }, executor = query) => {
+export const insertUsageLog = async (
+  { userId, action = null },
+  executor = query,
+) => {
   const result = await runQuery(
     executor,
     `INSERT INTO ai_usage_logs (
-       user_id
+       user_id,
+       action
      )
-     VALUES ($1)
+     VALUES ($1, $2)
      RETURNING ${USAGE_COLUMNS}`,
-    [userId],
+    [userId, action],
   );
 
   return result.rows[0];

@@ -43,7 +43,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const openProjects = projects.filter((p) => p.status === 'open');
   const pendingProposalsCount = proposals.filter((p) => p.status === 'pending').length;
   const totalEscrow = contracts
-    .filter((c) => c.paymentStatus === 'escrow_held')
+    .filter((c) => c.escrowHeld > 0 && c.paymentStatus !== 'released')
     .reduce((acc, c) => acc + c.escrowHeld, 0);
 
   // Status calculation for project distribution

@@ -3,6 +3,7 @@ import { query } from '../../config/db.js';
 const SUBSCRIPTION_COLUMNS = `
   id,
   freelancer_id,
+  client_id,
   plan_type,
   price,
   start_date,
@@ -51,6 +52,65 @@ export const findActiveSubscriptionByFreelancerId = async (
   );
 
   return result.rows[0] || null;
+};
+
+export const findActiveSubscriptionByClientId = async (
+  clientId,
+  executor = query,
+) => {
+  const result = await runQuery(
+    executor,
+    `SELECT ${SUBSCRIPTION_COLUMNS}
+     FROM subscriptions
+     WHERE client_id = $1
+       AND status = 'active'
+       AND end_date >= CURRENT_DATE`,
+    [clientId],
+  );
+
+  return result.rows[0] || null;
+};
+
+export const settleDueSubscriptionsByClientId = async (
+  clientId,
+  executor = query,
+) => {
+  const result = await runQuery(
+    executor,
+    `UPDATE subscriptions
+     SET status = CASE
+       WHEN cancel_at_period_end IS TRUE THEN 'cancelled'
+       ELSE 'expired'
+     END
+     WHERE client_id = $1
+       AND status = 'active'
+       AND end_date IS NOT NULL
+       AND end_date < CURRENT_DATE
+     RETURNING ${SUBSCRIPTION_COLUMNS}`,
+    [clientId],
+  );
+
+  return result.rows;
+};
+
+export const lockActiveSubscriptionsByClientId = async (clientId, executor) => {
+  const result = await runQuery(
+    executor,
+    `SELECT ${SUBSCRIPTION_COLUMNS}
+     FROM subscriptions
+     WHERE client_id = $1
+       AND status = 'active'
+     FOR UPDATE`,
+    [clientId],
+  );
+
+  return result.rows;
+};
+
+export const lockActiveSubscriptionByClientId = async (clientId, executor) => {
+  await lockActiveSubscriptionsByClientId(clientId, executor);
+  await settleDueSubscriptionsByClientId(clientId, executor);
+  return findActiveSubscriptionByClientId(clientId, executor);
 };
 
 export const lockActiveSubscriptionsByFreelancerId = async (
@@ -139,13 +199,14 @@ export const extendSubscriptionEndDate = async (
 };
 
 export const insertSubscription = async (
-  { freelancerId, planType, price },
+  { freelancerId, clientId = null, planType, price },
   executor = query,
 ) => {
   const result = await runQuery(
     executor,
     `INSERT INTO subscriptions (
        freelancer_id,
+       client_id,
        plan_type,
        price,
        start_date,
@@ -158,6 +219,7 @@ export const insertSubscription = async (
        $1,
        $2,
        $3,
+       $4,
        CURRENT_DATE,
        CURRENT_DATE + 30,
        'active',
@@ -165,7 +227,7 @@ export const insertSubscription = async (
        FALSE
      )
      RETURNING ${SUBSCRIPTION_COLUMNS}`,
-    [freelancerId, planType, price],
+    [freelancerId ?? null, clientId ?? null, planType, price],
   );
 
   return result.rows[0];

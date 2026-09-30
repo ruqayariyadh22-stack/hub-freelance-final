@@ -133,6 +133,7 @@ export const initialProposals: Proposal[] = [
       experienceMatch: 96,
       specialtyMatch: 98,
       portfolioRelevance: 95,
+      ratingsMatch: 97,
       aiRecommendation: 'تطابق استثنائي (Top Recommended): المستقل أنجز مشاريع مطابقة تماماً لنفس التقنيات المطلوبة مع تقييم 5 نجوم.',
       aiPros: [
         'خبرة 6 سنوات في Next.js وتطبيقات التجارة',
@@ -162,6 +163,7 @@ export const initialProposals: Proposal[] = [
       experienceMatch: 88,
       specialtyMatch: 90,
       portfolioRelevance: 86,
+      ratingsMatch: 88,
       aiRecommendation: 'تطابق عالي جداً: مناسب لميزانية المشروع ولديه سجل تسليم ممتاز.',
       aiPros: [
         'سعر تنافسي ومدروس',
@@ -190,6 +192,7 @@ export const initialProposals: Proposal[] = [
       experienceMatch: 75,
       specialtyMatch: 82,
       portfolioRelevance: 75,
+      ratingsMatch: 76,
       aiRecommendation: 'تطابق جيد: مناسب للأعمال ذات الميزانية الاقتصادية، خبرة أقل نسبياً في المشاريع الضخمة.',
       aiPros: [
         'أقل سعر مقدم',

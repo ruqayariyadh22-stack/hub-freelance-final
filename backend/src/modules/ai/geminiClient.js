@@ -46,8 +46,35 @@ const buildPrompt = ({ action, context }) => {
   if (action === 'freelancer-matching') {
     return [
       'You are an advisor for Hub Freelance.',
-      'Using the client project information and freelancer profiles below, provide matching analysis.',
+      'Compare EACH proposed freelancer to the project requirements.',
+      'You MUST score exactly these five factors for every freelancer (integers 0-100):',
+      '1) skillsMatch — skills vs project required_skills',
+      '2) experienceMatch — experience_years and completed work vs project needs',
+      '3) specialtyMatch — specialization vs project category/domain',
+      '4) portfolioRelevance — portfolio items fit to the project',
+      '5) ratingsMatch — previous ratings / rating_avg',
       'Do not accept proposals or choose a freelancer.',
+      'Do not invent missing data; score lower when data is absent.',
+      'Return ONLY valid JSON (no markdown) with this exact shape:',
+      '{"matches":[{"freelancerId":<number>,"skillsMatch":<0-100>,"experienceMatch":<0-100>,"specialtyMatch":<0-100>,"portfolioRelevance":<0-100>,"ratingsMatch":<0-100>,"recommendation":"<short>","explanation":"<short>"}]}',
+      'Include one matches entry for every freelancer in the context. freelancers list.',
+      '',
+      contextText,
+    ].join('\n');
+  }
+
+  if (action === 'description-assistant') {
+    return [
+      'You are an advisor for Hub Freelance.',
+      'Create a clear, professional, structured project description for a client to publish.',
+      'Use ONLY these client inputs from the context:',
+      '- idea',
+      '- budget_min / budget_max',
+      '- duration_days',
+      '- required_skills',
+      'Do not publish projects or change project status.',
+      'Return ONLY valid JSON (no markdown) with this exact shape:',
+      '{"description":"<full project description text>"}',
       '',
       contextText,
     ].join('\n');
@@ -90,5 +117,23 @@ export const generateAiCompletion = async ({ action, context }) => {
     }
 
     throw new AppError(PROVIDER_ERROR, 503);
+  }
+};
+
+export const parseJsonFromAiText = (text) => {
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new AppError('Unable to complete AI request', 503);
+  }
+
+  let candidate = text.trim();
+  const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    candidate = fenced[1].trim();
+  }
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    throw new AppError('Unable to complete AI request', 503);
   }
 };

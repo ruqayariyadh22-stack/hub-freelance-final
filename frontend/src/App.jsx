@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import HubLogo from './shared/HubLogo';
@@ -15,6 +15,7 @@ import AdminReports from './admin/pages/Reports';
 import AdminReviews from './admin/pages/Reviews';
 import AdminStatistics from './admin/pages/Statistics';
 import AdminSettings from './admin/pages/Settings';
+import { isAdminSession } from './admin/api';
 import ClientApp from './client/App';
 import FreelancerApp from './freelancer/freelance-App';
 import AboutProject from './AboutProject';
@@ -24,16 +25,75 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const submit = (e) => {
+  const [submitting, setSubmitting] = useState(false);
+  const GENERIC_LOGIN_ERROR = "Unable to sign in. Please try again.";
+  const submit = async (e) => {
     e.preventDefault();
+    if (submitting) {
+      return;
+    }
     if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
       return;
     }
 
-    localStorage.setItem("hub_role", role);
+    setError("");
+    setSubmitting(true);
 
-    navigate(role === "client" ? "/client" : "/freelancer");
+    try {
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      const backendMessage =
+        payload && typeof payload.message === "string" && payload.message.trim()
+          ? payload.message.trim()
+          : "";
+
+      if (!response.ok || !payload?.success || !payload?.data?.token || !payload?.data?.user) {
+        setError(backendMessage || GENERIC_LOGIN_ERROR);
+        return;
+      }
+
+      const { user, token } = payload.data;
+      const serverRole = user.role;
+
+      if (serverRole !== "client" && serverRole !== "freelancer" && serverRole !== "admin") {
+        setError(GENERIC_LOGIN_ERROR);
+        return;
+      }
+
+      localStorage.setItem("hub_token", token);
+      localStorage.setItem("hub_user", JSON.stringify(user));
+      localStorage.setItem("hub_role", serverRole);
+
+      if (serverRole === "admin") {
+        localStorage.removeItem("hub_admin_authenticated");
+        navigate("/admin/dashboard");
+      } else if (serverRole === "freelancer") {
+        navigate("/freelancer");
+      } else {
+        navigate("/client");
+      }
+    } catch {
+      setError(GENERIC_LOGIN_ERROR);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -77,7 +137,7 @@ function LoginPage() {
             <div className="field"><label>Email address</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></div>
             <div className="field"><label>Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
             {error && <div className="login-error">{error}</div>}
-            <button className="login-submit" type="submit">Continue as {role === 'client' ? 'Client' : 'Freelancer'} {role === 'client' ? <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/> : <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/>}</button>
+            <button className="login-submit" type="submit" disabled={submitting}>Continue as {role === 'client' ? 'Client' : 'Freelancer'} {role === 'client' ? <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/> : <ArrowRight size={15} style={{verticalAlign:'middle',marginLeft:6}}/>}</button>
           </form>
           <p className="login-hint"><ShieldCheck size={13} style={{verticalAlign:'middle',marginRight:4}}/> Demo login: any valid email and password will open the selected workspace.</p>
         </div>
@@ -87,20 +147,94 @@ function LoginPage() {
 }
 
 function WorkspaceGate({ role, children }) {
-  const currentRole = localStorage.getItem('hub_role');
-  if (currentRole !== role) return <Navigate to="/" replace />;
+  const token = localStorage.getItem('hub_token');
+  const [authState, setAuthState] = useState(() => (token ? 'checking' : 'unauthenticated'));
+
+  useEffect(() => {
+    if (!token) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const verifySession = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/users/me', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem('hub_token');
+          localStorage.removeItem('hub_user');
+          localStorage.removeItem('hub_role');
+          if (!cancelled) {
+            setAuthState('unauthenticated');
+          }
+          return;
+        }
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok || !payload?.success || !payload?.data || typeof payload.data !== 'object') {
+          if (!cancelled) {
+            setAuthState('error');
+          }
+          return;
+        }
+
+        const user = payload.data;
+        localStorage.setItem('hub_user', JSON.stringify(user));
+
+        const serverRole = user.role;
+        if (serverRole === 'client' || serverRole === 'freelancer' || serverRole === 'admin') {
+          localStorage.setItem('hub_role', serverRole);
+        }
+
+        if (!cancelled) {
+          setAuthState(serverRole === role ? 'ready' : 'forbidden');
+        }
+      } catch {
+        if (!cancelled) {
+          setAuthState('error');
+        }
+      }
+    };
+
+    verifySession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role, token]);
+
+  if (!token || authState === 'unauthenticated' || authState === 'forbidden' || authState === 'error') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (authState !== 'ready') {
+    return null;
+  }
+
   return children;
 }
 
 function AdminLoginGate() {
-  if (localStorage.getItem('hub_admin_authenticated') === 'true') {
+  if (isAdminSession()) {
     return <Navigate to="/admin/dashboard" replace />;
   }
   return <AdminLogin />;
 }
 
 function AdminProtectedLayout() {
-  if (localStorage.getItem('hub_admin_authenticated') !== 'true') {
+  if (!isAdminSession()) {
     return <Navigate to="/admin" replace />;
   }
   return <AdminLayout />;

@@ -1,39 +1,115 @@
-import ManagementPage from "../components/ManagementPage";
-
-const data = [
-  { id: 1, freelancer: "Omar Kareem", plan: "Professional", price: "$29", start: "2026-09-01", end: "2026-10-01", status: "Active", payment: "Paid" },
-  { id: 2, freelancer: "Sara Khalid", plan: "Premium", price: "$49", start: "2026-08-20", end: "2026-09-20", status: "Active", payment: "Paid" },
-  { id: 3, freelancer: "Ali Hassan", plan: "Basic", price: "$15", start: "2026-07-01", end: "2026-08-01", status: "Expired", payment: "Paid" },
-  { id: 4, freelancer: "Noor Jasim", plan: "Premium", price: "$49", start: "2026-09-05", end: "2026-10-05", status: "Active", payment: "Paid" },
-  { id: 5, freelancer: "Fatima Abbas", plan: "Professional", price: "$29", start: "2026-06-01", end: "2026-07-01", status: "Cancelled", payment: "Refunded" },
-];
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AdminApiError, adminPatch } from '../api';
+import useAdminList from '../hooks/useAdminList';
+import AdminTablePage from '../components/AdminTablePage';
+import { useLanguage } from '../components/LanguageContext';
 
 export default function Subscriptions() {
-  return <ManagementPage
-    title="Subscriptions"
-    subtitle="Manage freelancer paid subscriptions"
-    addLabel=" Add Subscription"
-    searchPlaceholder="Search subscriptions..."
-    filterOptions={["All", "Active", "Expired", "Cancelled"]}
-    initialData={data}
-    searchKeys={["freelancer", "plan", "status", "payment"]}
-    columns={[
-      { key: "freelancer", label: "Freelancer" },
-      { key: "plan", label: "Plan" },
-      { key: "price", label: "Price" },
-      { key: "start", label: "Start" },
-      { key: "end", label: "End" },
-      { key: "status", label: "Status", badge: true },
-      { key: "payment", label: "Payment" },
-    ]}
-    fields={[
-      { key: "freelancer", label: "Freelancer" },
-      { key: "plan", label: "Subscription Plan", type: "select", options: ["Basic", "Professional", "Premium"] },
-      { key: "price", label: "Price" },
-      { key: "start", label: "Start Date", type: "date" },
-      { key: "end", label: "End Date", type: "date" },
-      { key: "status", label: "Status", type: "select", options: ["Active", "Expired", "Cancelled"] },
-      { key: "payment", label: "Payment Status", type: "select", options: ["Paid", "Pending", "Refunded"] },
-    ]}
-  />;
+  const navigate = useNavigate();
+  const { isArabic } = useLanguage();
+  const { items, meta, loading, error, params, setParams, reload } =
+    useAdminList('/admin/subscriptions');
+  const [busyId, setBusyId] = useState(null);
+  const [actionError, setActionError] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setParams((prev) => ({ ...prev, search: searchInput, page: 1 }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, setParams]);
+
+  const columns = useMemo(
+    () => [
+      { key: 'id', label: 'ID' },
+      {
+        key: 'subscriber',
+        label: 'Subscriber',
+        render: (item) =>
+          item.client_id
+            ? `${item.client_name || 'Client'} (Client #${item.client_id})`
+            : `${item.freelancer_name || 'Freelancer'} (Freelancer #${item.freelancer_id})`,
+      },
+      { key: 'plan_type', label: 'Plan' },
+      {
+        key: 'price',
+        label: 'Price',
+        render: (item) => (item.price == null ? '—' : String(item.price)),
+      },
+      { key: 'start_date', label: 'Start' },
+      { key: 'end_date', label: 'End' },
+      { key: 'status', label: 'Status' },
+      { key: 'payment_status', label: 'Payment' },
+    ],
+    [],
+  );
+
+  return (
+    <AdminTablePage
+      title="Subscriptions"
+      subtitle="Manage freelancer and Client AI subscriptions"
+      searchPlaceholder="Search subscriptions..."
+      columns={columns}
+      items={items}
+      loading={loading}
+      error={actionError || error}
+      emptyText="No subscriptions found"
+      search={searchInput}
+      onSearchChange={setSearchInput}
+      filters={
+        <>
+          <select
+            value={params.status || ''}
+            onChange={(e) => setParams((p) => ({ ...p, status: e.target.value, page: 1 }))}
+          >
+            <option value="">{isArabic ? 'كل الحالات' : 'All statuses'}</option>
+            <option value="active">active</option>
+            <option value="expired">expired</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <select
+            value={params.plan || ''}
+            onChange={(e) => setParams((p) => ({ ...p, plan: e.target.value, page: 1 }))}
+          >
+            <option value="">{isArabic ? 'كل الخطط' : 'All plans'}</option>
+            <option value="Freelancer Pro">Freelancer Pro</option>
+            <option value="Client AI">Client AI</option>
+          </select>
+        </>
+      }
+      page={meta.page}
+      totalPages={meta.total_pages}
+      total={meta.total}
+      onPageChange={(page) => setParams((p) => ({ ...p, page }))}
+      renderActions={(item) => (
+        <select
+          disabled={busyId === item.id}
+          value={item.status || ''}
+          onChange={async (e) => {
+            const status = e.target.value;
+            setBusyId(item.id);
+            setActionError('');
+            try {
+              await adminPatch(`/admin/subscriptions/${item.id}`, { status });
+              await reload();
+            } catch (err) {
+              if (err instanceof AdminApiError && err.status === 401) {
+                navigate('/admin', { replace: true });
+                return;
+              }
+              setActionError(err?.message || 'Update failed');
+            } finally {
+              setBusyId(null);
+            }
+          }}
+        >
+          <option value="active">active</option>
+          <option value="expired">expired</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+      )}
+    />
+  );
 }

@@ -16,8 +16,10 @@ import {
   Building2,
   ChevronRight,
   ChevronLeft,
-  Handshake
+  Handshake,
+  Sparkles
 } from 'lucide-react';
+import { ClientProfile } from '../types';
 
 declare global {
   namespace JSX {
@@ -53,6 +55,7 @@ export type ActiveTab =
   | 'wallet'
   | 'disputes'
   | 'reviews'
+  | 'subscriptions'
   | 'settings';
 
 interface SidebarProps {
@@ -62,6 +65,7 @@ interface SidebarProps {
   unreadScopeChangesCount?: number;
   pendingProposalsCount?: number;
   isArabic: boolean;
+  clientProfile: ClientProfile;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,7 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openNewProjectModal,
   unreadScopeChangesCount = 1,
   pendingProposalsCount = 3,
-  isArabic
+  isArabic,
+  clientProfile
 }) => {
 
 const navigate = useNavigate();
@@ -123,6 +128,12 @@ const navigate = useNavigate();
       id: 'reviews' as ActiveTab,
       label: isArabic ? 'التقييمات' : 'Reviews & Ratings',
       icon: Star,
+      badge: null
+    },
+    {
+      id: 'subscriptions' as ActiveTab,
+      label: isArabic ? 'اشتراك Client AI' : 'Client AI',
+      icon: Sparkles,
       badge: null
     },
     {
@@ -192,6 +203,8 @@ const navigate = useNavigate();
 <div className="px-3 pb-2">
   <button
     onClick={() => {
+      localStorage.removeItem('hub_token');
+      localStorage.removeItem('hub_user');
       localStorage.removeItem('hub_role');
       navigate('/');
     }}
@@ -214,8 +227,8 @@ const navigate = useNavigate();
             <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#122338]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-white truncate">Horizon Digital</p>
-            <p className="text-[11px] text-slate-400 truncate">أحمد علي (Client)</p>
+            <p className="text-xs font-bold text-white truncate">{clientProfile.companyName?.trim() ? clientProfile.companyName : '—'}</p>
+            <p className="text-[11px] text-slate-400 truncate">{clientProfile.name} (Client)</p>
           </div>
         </div>
         <div className="mt-2.5 pt-2.5 border-t border-slate-700/40 flex items-center justify-between text-[11px] text-slate-400">

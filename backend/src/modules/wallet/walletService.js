@@ -13,8 +13,10 @@ import { findFreelancerProfileById } from '../freelancer/freelancerPersistence.j
 import {
   lockContractById,
   updateContractPaymentStatusById,
+  updateContractStatusById,
 } from '../workspace/contracts/contractsPersistence.js';
 import {
+  AWAITING_ESCROW,
   assertEscrowFunded,
   assertNoActiveDispute,
   DELIVERED_CONTRACT_STATUSES,
@@ -33,11 +35,11 @@ import {
 
 export { calculateCommission, validateMoneyAmount } from './money.js';
 export {
-  AWAITING_ESCROW,
   FINAL_RELEASE_RULES,
   assertEscrowFunded,
   assertNoActiveDispute,
 } from './escrow.js';
+export { AWAITING_ESCROW };
 
 const TRANSACTION_TYPES = {
   DEPOSIT: 'deposit',
@@ -225,6 +227,10 @@ export const holdEscrow = async (contractId, actor) => {
       },
       client,
     );
+
+    if (contract.status === AWAITING_ESCROW) {
+      await updateContractStatusById(contract.id, 'in_progress', client);
+    }
 
     await lockProjectById(contract.project_id, client);
     await markProjectInProgressIfPendingApproval(contract.project_id, client);

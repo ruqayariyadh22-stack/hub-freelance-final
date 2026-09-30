@@ -24,9 +24,14 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
   isArabic
 }) => {
   // Check completed contracts that haven't been reviewed yet
-  const unreviewedCompletedContracts = contracts.filter(
-    (c) => c.status === 'completed' && !reviews.some((r) => r.contractId === c.id)
-  );
+  const unreviewedCompletedContracts = contracts.filter((c) => {
+    const alreadyListed = reviews.some((r) => r.contractId === c.id);
+    if (/^\d+$/.test(c.id)) {
+      return !alreadyListed;
+    }
+    return c.status === 'completed' && !alreadyListed;
+  });
+  const hasRealReviews = reviews.some((review) => /^\d+$/.test(review.id));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -44,10 +49,12 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-bold">
-            <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-            <span>{isArabic ? 'متوسط تقييمك للمستقلين: 5.0' : 'Avg Rating Given: 5.0'}</span>
-          </div>
+          {!hasRealReviews && (
+            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-bold">
+              <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+              <span>{isArabic ? 'متوسط تقييمك للمستقلين: 5.0' : 'Avg Rating Given: 5.0'}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -60,12 +67,18 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
             </div>
             <div>
               <h3 className="text-xs font-bold text-amber-900">
-                {isArabic ? 'لديك مشاريع مكتملة بانتظار تقييمك!' : 'Pending Reviews for Completed Projects'}
+                {/^\d+$/.test(unreviewedCompletedContracts[0].id)
+                  ? isArabic
+                    ? 'يمكنك إضافة تقييم لهذا العقد'
+                    : 'Leave a review for this contract'
+                  : isArabic
+                    ? 'لديك مشاريع مكتملة بانتظار تقييمك!'
+                    : 'Pending Reviews for Completed Projects'}
               </h3>
               <p className="text-xs text-amber-800 mt-0.5">
                 {isArabic
-                  ? `أكملت بنجاح مشروع "${unreviewedCompletedContracts[0].projectTitle}". ساهم في دعم المستقل بإضافة تقييمك.`
-                  : `Successfully completed project "${unreviewedCompletedContracts[0].projectTitle}". Leave a review.`}
+                  ? `عقد "${unreviewedCompletedContracts[0].projectTitle}". أضف تقييمك للمستقل.`
+                  : `Contract "${unreviewedCompletedContracts[0].projectTitle}". Leave a review.`}
               </p>
             </div>
           </div>
@@ -137,6 +150,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                 </p>
 
                 {/* Tag pills */}
+                {rev.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {rev.tags.map((tag, idx) => (
                     <span
@@ -147,6 +161,7 @@ export const ReviewsView: React.FC<ReviewsViewProps> = ({
                     </span>
                   ))}
                 </div>
+                )}
               </div>
             ))
           )}

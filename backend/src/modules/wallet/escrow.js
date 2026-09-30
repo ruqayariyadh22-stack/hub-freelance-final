@@ -6,7 +6,7 @@ import {
   findTransactionByContractIdAndType,
 } from './walletPersistence.js';
 
-// Funding/execution condition only. Not a documented contracts.status value.
+// Pre-execution contract status until escrow funding succeeds.
 export const AWAITING_ESCROW = 'awaiting_escrow';
 
 export const FINAL_RELEASE_RULES = {

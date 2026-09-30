@@ -1,90 +1,94 @@
-import React, { useState } from 'react';
-import { Check, Zap, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, Zap } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { Card, Modal, PageHeader } from '../components/freelance-UI';
+import { Card, PageHeader } from '../components/freelance-UI';
+import { errorMessage, freelancerGet, freelancerPost } from '../api';
 
 export default function Subscriptions({ lang, notify }) {
-  const plans = [
-    {
-      name: 'Basic',
-      price: 15,
-      features: [
-        '5 عروض إضافية شهرياً',
-        'مطابقة ذكية أساسية',
-        'دعم أساسي'
-      ]
-    },
-    {
-      name: 'Professional',
-      price: 29,
-      popular: true,
-      features: [
-        '15 عرضاً إضافياً',
-        'مطابقة ذكية متقدمة',
-        'شارة Pro',
-        'أولوية في الدعم'
-      ]
-    },
-    {
-      name: 'Premium',
-      price: 49,
-      features: [
-        'عروض غير محدودة',
-        'مطابقة ذكية متقدمة',
-        'شارة Top Rated',
-        'أولوية في الظهور'
-      ]
+  const [plans, setPlans] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [noActive, setNoActive] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    setNoActive(false);
+    try {
+      const planData = await freelancerGet('/subscriptions/plans');
+      setPlans(Array.isArray(planData) ? planData : []);
+      try {
+        const current = await freelancerGet('/subscriptions/me');
+        setSubscription(current);
+      } catch (err) {
+        if (err?.status === 404) {
+          setSubscription(null);
+          setNoActive(true);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      setError(
+        errorMessage(err, t(lang, 'تعذر تحميل الاشتراك', 'Failed to load subscription')),
+      );
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const [currentPlan, setCurrentPlan] = useState('Professional');
-  const [manageOpen, setManageOpen] = useState(false);
-  const [confirmPlan, setConfirmPlan] = useState(null);
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [active, setActive] = useState(true);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const selectedPlan = plans.find(
-    plan => plan.name === currentPlan
-  );
-
-  const choosePlan = (plan) => {
-    if (plan.name === currentPlan && active) {
-      setManageOpen(true);
-      return;
+  const subscribe = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const created = await freelancerPost('/subscriptions', {});
+      setSubscription(created);
+      setNoActive(false);
+      notify(t(lang, 'تم الاشتراك في Freelancer Pro', 'Subscribed to Freelancer Pro'));
+    } catch (err) {
+      notify(errorMessage(err, t(lang, 'فشل الاشتراك', 'Subscription failed')));
+    } finally {
+      setBusy(false);
     }
-
-    setConfirmPlan(plan);
   };
 
-  const confirmSubscription = () => {
-    if (!confirmPlan) return;
-
-    setCurrentPlan(confirmPlan.name);
-    setActive(true);
-    setConfirmPlan(null);
-
-    notify(
-      t(
-        lang,
-        `تم الاشتراك في باقة ${confirmPlan.name} بنجاح`,
-        `You subscribed to the ${confirmPlan.name} plan`
-      )
-    );
+  const cancel = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const updated = await freelancerPost('/subscriptions/cancel', {});
+      setSubscription(updated);
+      notify(
+        t(lang, 'تم إلغاء التجديد التلقائي', 'Auto-renewal cancelled'),
+      );
+    } catch (err) {
+      notify(errorMessage(err, t(lang, 'فشل الإلغاء', 'Cancel failed')));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const cancelSubscription = () => {
-    setActive(false);
-    setCancelOpen(false);
-    setManageOpen(false);
-
-    notify(
-      t(
-        lang,
-        'تم إلغاء التجديد التلقائي للاشتراك',
-        'Automatic subscription renewal has been cancelled'
-      )
-    );
+  const renew = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const updated = await freelancerPost('/subscriptions/renew', {});
+      setSubscription(updated);
+      notify(t(lang, 'تم تجديد الاشتراك', 'Subscription renewed'));
+    } catch (err) {
+      notify(errorMessage(err, t(lang, 'فشل التجديد', 'Renew failed')));
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const plan = plans[0];
 
   return (
     <>
@@ -92,329 +96,81 @@ export default function Subscriptions({ lang, notify }) {
         lang={lang}
         titleAr="الاشتراكات"
         titleEn="Subscriptions"
-        subAr="طوّر حدود الاستخدام ومزايا المطابقة والأدوات الذكية."
-        subEn="Unlock more usage, matching, and smart tools."
+        subAr="الخطة المعتمدة في النظام: Freelancer Pro فقط."
+        subEn="The platform supports Freelancer Pro only."
       />
 
-      <div className="plans">
-        {plans.map(plan => (
-          <Card
-            className={`plan ${plan.popular ? 'popular' : ''}`}
-            key={plan.name}
-          >
-            {plan.popular && (
-              <span className="popular-badge">
-                {t(lang, 'الأكثر استخداماً', 'Most used')}
-              </span>
-            )}
-
-            <div className="plan-icon">
-              <Zap size={19} />
-            </div>
-
-            <h3>{plan.name}</h3>
-
-            <div className="price">
-              ${plan.price}
-              <small>/month</small>
-            </div>
-
-            <div className="divider" />
-
-            {plan.features.map(feature => (
-              <div className="feature" key={feature}>
-                <Check size={14} />
-                {t(
-                  lang,
-                  feature,
-                  feature
-                    .replace('عروض إضافية', 'extra offers')
-                    .replace('عروضاً إضافية', 'extra offers')
-                    .replace('عروض غير محدودة', 'unlimited offers')
-                    .replace('مطابقة ذكية أساسية', 'basic smart matching')
-                    .replace('مطابقة ذكية متقدمة', 'advanced smart matching')
-                    .replace('دعم أساسي', 'basic support')
-                    .replace('شارة Pro', 'Pro badge')
-                    .replace('شارة Top Rated', 'Top Rated badge')
-                    .replace('أولوية في الدعم', 'priority support')
-                    .replace('أولوية في الظهور', 'priority visibility')
-                )}
-              </div>
-            ))}
-
-            <button
-              className={
-                plan.name === currentPlan && active
-                  ? 'ghost'
-                  : plan.popular
-                    ? 'primary'
-                    : 'ghost'
-              }
-              onClick={() => choosePlan(plan)}
-            >
-              {plan.name === currentPlan && active
-                ? t(lang, 'الباقة الحالية', 'Current plan')
-                : plan.popular
-                  ? t(lang, 'الاشتراك الآن', 'Subscribe now')
-                  : t(lang, 'اختيار الباقة', 'Choose plan')}
-            </button>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="current-plan">
-        <div className="between">
-          <div>
-            <span
-              className={`badge-soft ${
-                active ? 'green' : 'red'
-              }`}
-            >
-              {active
-                ? t(lang, 'نشطة', 'Active')
-                : t(lang, 'ملغاة', 'Cancelled')}
-            </span>
-
-            <h3>
-              {active
-                ? t(
-                    lang,
-                    `باقة ${currentPlan} الحالية`,
-                    `Current ${currentPlan} plan`
-                  )
-                : t(
-                    lang,
-                    `باقة ${currentPlan} — غير مجددة`,
-                    `${currentPlan} plan — not renewing`
-                  )}
-            </h3>
-
-            <p>
-              {active
-                ? t(
-                    lang,
-                    'تنتهي في 2026-10-01 · الدفع مكتمل',
-                    'Renews on 2026-10-01 · Payment completed'
-                  )
-                : t(
-                    lang,
-                    'ستبقى المزايا متاحة حتى نهاية فترة الاشتراك الحالية.',
-                    'Your benefits remain available until the current billing period ends.'
-                  )}
-            </p>
-          </div>
-
-          <button
-            className="ghost"
-            onClick={() => setManageOpen(true)}
-          >
-            {t(lang, 'إدارة الاشتراك', 'Manage subscription')}
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && (
+        <Card>
+          <p className="notice amber">{error}</p>
+          <button className="primary" type="button" onClick={load}>
+            {t(lang, 'إعادة المحاولة', 'Retry')}
           </button>
-        </div>
-      </Card>
-
-      {confirmPlan && (
-        <Modal
-          lang={lang}
-          titleAr="تأكيد الاشتراك"
-          titleEn="Confirm Subscription"
-          onClose={() => setConfirmPlan(null)}
-        >
-          <div className="subscription-confirm">
-            <div className="plan-icon">
-              <Zap size={19} />
-            </div>
-
-            <h3>
-              {t(
-                lang,
-                `باقة ${confirmPlan.name}`,
-                `${confirmPlan.name} Plan`
-              )}
-            </h3>
-
-            <div className="price">
-              ${confirmPlan.price}
-              <small>/month</small>
-            </div>
-
-            <p>
-              {t(
-                lang,
-                'سيتم تفعيل هذه الباقة على حسابك محلياً.',
-                'This plan will be activated on your account locally.'
-              )}
-            </p>
-
-            <div className="confirm-features">
-              {confirmPlan.features.map(feature => (
-                <div key={feature}>
-                  <Check size={14} />
-                  {t(lang, feature, feature)}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="modal-actions">
-            <button
-              className="ghost"
-              onClick={() => setConfirmPlan(null)}
-            >
-              {t(lang, 'إلغاء', 'Cancel')}
-            </button>
-
-            <button
-              className="primary"
-              onClick={confirmSubscription}
-            >
-              {t(
-                lang,
-                'تأكيد الاشتراك',
-                'Confirm subscription'
-              )}
-            </button>
-          </div>
-        </Modal>
+        </Card>
       )}
 
-      {manageOpen && (
-        <Modal
-          lang={lang}
-          titleAr="إدارة الاشتراك"
-          titleEn="Manage Subscription"
-          onClose={() => setManageOpen(false)}
-        >
-          <div className="manage-subscription">
-            <div className="between">
-              <div>
-                <span className="badge-soft green">
-                  {active
-                    ? t(lang, 'نشطة', 'Active')
-                    : t(lang, 'ملغاة', 'Cancelled')}
+      {!loading && !error && (
+        <div className="plans">
+          {plan && (
+            <Card className="plan popular">
+              <div className="between">
+                <span className="badge-soft blue">
+                  <Zap size={12} /> {plan.plan_type}
                 </span>
-
-                <h3>
-                  {t(
-                    lang,
-                    `باقة ${currentPlan}`,
-                    `${currentPlan} Plan`
-                  )}
-                </h3>
-              </div>
-
-              <strong>
-                ${selectedPlan?.price}/month
-              </strong>
-            </div>
-
-            <div className="divider" />
-
-            <div className="manage-info">
-              <div>
-                <span>
-                  {t(lang, 'تاريخ التجديد', 'Renewal date')}
-                </span>
-                <strong>2026-10-01</strong>
-              </div>
-
-              <div>
-                <span>
-                  {t(lang, 'حالة الدفع', 'Payment status')}
-                </span>
-                <strong>
-                  {t(lang, 'مكتمل', 'Completed')}
-                </strong>
-              </div>
-            </div>
-
-            <div className="manage-features">
-              {selectedPlan?.features.map(feature => (
-                <div key={feature}>
-                  <Check size={14} />
-                  {t(lang, feature, feature)}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="modal-actions">
-            <button
-              className="ghost"
-              onClick={() => {
-                setManageOpen(false);
-                setConfirmPlan(selectedPlan);
-              }}
-            >
-              {t(lang, 'تغيير الباقة', 'Change plan')}
-            </button>
-
-            {active && (
-              <button
-                className="danger"
-                onClick={() => setCancelOpen(true)}
-              >
-                <X size={15} />
-                {t(
-                  lang,
-                  'إلغاء الاشتراك',
-                  'Cancel subscription'
+                {!noActive && subscription && (
+                  <span className="badge-soft green">
+                    {t(lang, 'نشط', 'Active')}
+                  </span>
                 )}
-              </button>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {cancelOpen && (
-        <Modal
-          lang={lang}
-          titleAr="إلغاء الاشتراك"
-          titleEn="Cancel Subscription"
-          onClose={() => setCancelOpen(false)}
-        >
-          <div className="cancel-subscription">
-            <div className="cancel-icon">
-              <X size={22} />
-            </div>
-
-            <h3>
-              {t(
-                lang,
-                'هل تريد إلغاء تجديد الاشتراك؟',
-                'Do you want to cancel subscription renewal?'
+              </div>
+              <h3>{plan.plan_type}</h3>
+              <div className="price">
+                <strong>
+                  {Number(plan.price).toLocaleString()} {plan.currency || ''}
+                </strong>
+                <small>
+                  / {plan.duration_days} {t(lang, 'يوم', 'days')}
+                </small>
+              </div>
+              <ul>
+                {(plan.benefits || []).map((b) => (
+                  <li key={b}>
+                    <Check size={14} /> {b}
+                  </li>
+                ))}
+              </ul>
+              {noActive || !subscription ? (
+                <button className="primary" type="button" disabled={busy} onClick={subscribe}>
+                  {busy
+                    ? t(lang, 'جاري الاشتراك...', 'Subscribing...')
+                    : t(lang, 'الاشتراك الآن', 'Subscribe now')}
+                </button>
+              ) : (
+                <div className="modal-actions">
+                  <button className="ghost" type="button" disabled={busy} onClick={cancel}>
+                    {t(lang, 'إلغاء التجديد', 'Cancel renewal')}
+                  </button>
+                  <button className="primary" type="button" disabled={busy} onClick={renew}>
+                    {t(lang, 'تجديد', 'Renew')}
+                  </button>
+                </div>
               )}
-            </h3>
-
-            <p>
-              {t(
-                lang,
-                'ستبقى مزاياك متاحة حتى نهاية فترة الاشتراك الحالية.',
-                'Your benefits will remain available until the end of the current billing period.'
+              {subscription && (
+                <p style={{ marginTop: 12 }}>
+                  {t(lang, 'الحالة', 'Status')}: {subscription.status} ·{' '}
+                  {t(lang, 'ينتهي', 'Ends')}:{' '}
+                  {subscription.end_date
+                    ? String(subscription.end_date).slice(0, 10)
+                    : '—'}
+                  {subscription.cancel_at_period_end
+                    ? ` · ${t(lang, 'يلغى عند نهاية الفترة', 'Cancels at period end')}`
+                    : ''}
+                </p>
               )}
-            </p>
-          </div>
-
-          <div className="modal-actions">
-            <button
-              className="ghost"
-              onClick={() => setCancelOpen(false)}
-            >
-              {t(lang, 'العودة', 'Go back')}
-            </button>
-
-            <button
-              className="danger"
-              onClick={cancelSubscription}
-            >
-              {t(
-                lang,
-                'تأكيد الإلغاء',
-                'Confirm cancellation'
-              )}
-            </button>
-          </div>
-        </Modal>
+            </Card>
+          )}
+        </div>
       )}
     </>
   );

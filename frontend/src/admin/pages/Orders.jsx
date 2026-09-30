@@ -1,43 +1,72 @@
-import ManagementPage from "../components/ManagementPage";
-
-const data = [
-  { id: "ORD-1001", client: "Ahmed Ali", freelancer: "Omar Kareem", project: "E-commerce Website", value: "$500", commission: "$50", status: "In Progress", payment: "Paid" },
-  { id: "ORD-1002", client: "Sara Khalid", freelancer: "Ali Hassan", project: "Mobile App UI", value: "$300", commission: "$30", status: "Pending", payment: "Pending" },
-  { id: "ORD-1003", client: "Fatima Abbas", freelancer: "Noor Jasim", project: "Brand Identity", value: "$450", commission: "$45", status: "Completed", payment: "Paid" },
-  { id: "ORD-1004", client: "Laith Adnan", freelancer: "Sara Khalid", project: "Blog Writing", value: "$150", commission: "$15", status: "In Progress", payment: "Paid" },
-  { id: "ORD-1005", client: "Noor Jasim", freelancer: "Fatima Abbas", project: "Logo Design", value: "$120", commission: "$12", status: "Cancelled", payment: "Refunded" },
-];
+import { useEffect, useMemo, useState } from 'react';
+import useAdminList from '../hooks/useAdminList';
+import AdminTablePage from '../components/AdminTablePage';
+import { useLanguage } from '../components/LanguageContext';
 
 export default function Orders() {
-  return <ManagementPage
-    title="Orders & Contracts"
-    subtitle="Track projects, orders and contracts"
-    searchPlaceholder="Search orders..."
-    filterOptions={["All", "Pending", "In Progress", "Completed", "Cancelled"]}
-    initialData={data}
-    searchKeys={["id", "client", "freelancer", "project", "status", "payment"]}
-    columns={[
-      { key: "id", label: "Order" },
-      { key: "client", label: "Client" },
-      { key: "freelancer", label: "Freelancer" },
-      { key: "project", label: "Project" },
-      { key: "value", label: "Value" },
-      { key: "commission", label: "Commission" },
-      { key: "status", label: "Status", badge: true },
-      { key: "payment", label: "Payment" },
-    ]}
-    fields={[
-      { key: "id", label: "Order Number" },
-      { key: "client", label: "Client" },
-      { key: "freelancer", label: "Freelancer" },
-      { key: "project", label: "Project" },
-      { key: "value", label: "Project Value" },
-      { key: "commission", label: "Commission" },
-      { key: "status", label: "Status", type: "select", options: ["Pending", "In Progress", "Completed", "Cancelled"] },
-      { key: "payment", label: "Payment Status", type: "select", options: ["Paid", "Pending", "Refunded"] },
-    ]}
-    extraActions={[
-      { label: "Track", onClick: (item) => window.alert(`Tracking ${item.id}`) }
-    ]}
-  />;
+  const { isArabic } = useLanguage();
+  const { items, meta, loading, error, params, setParams } =
+    useAdminList('/admin/contracts');
+  const [searchInput, setSearchInput] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setParams((prev) => ({ ...prev, search: searchInput, page: 1 }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, setParams]);
+
+  const columns = useMemo(
+    () => [
+      { key: 'id', label: 'Contract ID' },
+      { key: 'project_title', label: 'Project' },
+      { key: 'client_name', label: 'Client' },
+      { key: 'freelancer_name', label: 'Freelancer' },
+      {
+        key: 'contract_value',
+        label: 'Value',
+        render: (item) => `$${item.contract_value ?? 0}`,
+      },
+      {
+        key: 'commission',
+        label: 'Commission',
+        render: (item) => (item.commission == null ? '—' : `$${item.commission}`),
+      },
+      { key: 'status', label: 'Status' },
+      { key: 'payment_status', label: 'Payment' },
+      { key: 'start_date', label: 'Start' },
+      { key: 'delivery_date', label: 'Delivery' },
+    ],
+    [],
+  );
+
+  return (
+    <AdminTablePage
+      title="Orders & Contracts"
+      subtitle="Monitor contracts, values and order progress"
+      searchPlaceholder="Search contracts..."
+      columns={columns}
+      items={items}
+      loading={loading}
+      error={error}
+      emptyText="No contracts found"
+      search={searchInput}
+      onSearchChange={setSearchInput}
+      filters={
+        <select
+          value={params.status || ''}
+          onChange={(e) => setParams((p) => ({ ...p, status: e.target.value, page: 1 }))}
+        >
+          <option value="">{isArabic ? 'كل الحالات' : 'All statuses'}</option>
+          <option value="in_progress">in_progress</option>
+          <option value="delivered">delivered</option>
+          <option value="completed">completed</option>
+        </select>
+      }
+      page={meta.page}
+      totalPages={meta.total_pages}
+      total={meta.total}
+      onPageChange={(page) => setParams((p) => ({ ...p, page }))}
+    />
+  );
 }

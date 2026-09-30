@@ -11,14 +11,16 @@ import {
 interface TopUpModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTopUpSuccess: (amount: number, method: string) => void;
+  onTopUp: (amount: number) => Promise<boolean>;
+  submitError?: string;
   isArabic: boolean;
 }
 
 export const TopUpModal: React.FC<TopUpModalProps> = ({
   isOpen,
   onClose,
-  onTopUpSuccess,
+  onTopUp,
+  submitError,
   isArabic
 }) => {
   const [amount, setAmount] = useState(1000);
@@ -27,16 +29,19 @@ export const TopUpModal: React.FC<TopUpModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0 || isProcessing) return;
 
     setIsProcessing(true);
-    setTimeout(() => {
-      onTopUpSuccess(amount, method === 'card' ? 'Visa / Mastercard' : 'Bank Wire');
+    try {
+      const succeeded = await onTopUp(amount);
+      if (succeeded) {
+        onClose();
+      }
+    } finally {
       setIsProcessing(false);
-      onClose();
-    }, 800);
+    }
   };
 
   return (
@@ -145,6 +150,18 @@ export const TopUpModal: React.FC<TopUpModalProps> = ({
                 : 'Deposited funds are held securely in your client account and protected by Escrow.'}
             </span>
           </div>
+
+          {submitError && (
+            <p className="text-xs font-bold text-red-600">
+              {isArabic
+                ? submitError === 'Unable to top up.'
+                  ? 'تعذر شحن الرصيد.'
+                  : submitError === 'Unable to load wallet.'
+                    ? 'تعذر تحميل المحفظة.'
+                    : submitError
+                : submitError}
+            </p>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <button

@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { Search, Bell, Globe2, ChevronDown } from "lucide-react";
+import { Globe2 } from "lucide-react";
 import { useLanguage } from "./LanguageContext";
 
 const names = {
@@ -19,16 +19,20 @@ const names = {
 export default function Topbar() {
   const location = useLocation();
   const { isArabic, toggleLanguage, t } = useLanguage();
-
   const pageName = names[location.pathname] || "Dashboard";
+
+  let adminName = "Admin";
+  try {
+    const user = JSON.parse(localStorage.getItem("hub_user") || "null");
+    if (user?.name) adminName = user.name;
+  } catch {
+    adminName = "Admin";
+  }
 
   return (
     <header className="admin-topbar">
       <div className="topbar-page">
-        <div className="topbar-page-name">
-          {t(pageName)}
-        </div>
-
+        <div className="topbar-page-name">{t(pageName)}</div>
         <div className="topbar-breadcrumb">
           <span>Hub Freelance</span>
           <span>/</span>
@@ -37,53 +41,16 @@ export default function Topbar() {
       </div>
 
       <div className="topbar-right">
-
-        <label className="top-search">
-          <Search size={16} />
-          <input
-            type="text"
-            placeholder={t("Search...")}
-          />
-        </label>
-
-        <button
-          className="language-button"
-          onClick={toggleLanguage}
-          type="button"
-          title="Change language"
-        >
+        <button className="language-button" onClick={toggleLanguage} type="button">
           <Globe2 size={16} />
           <span>{isArabic ? "English" : "عربي"}</span>
         </button>
-
-        <button
-          className="notification-button"
-          type="button"
-          title={isArabic ? "الإشعارات" : "Notifications"}
-        >
-          <Bell size={17} />
-          <span className="notification-dot" />
-        </button>
-
         <div className="admin-info">
-          <img
-            className="admin-avatar-image"
-            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80"
-            alt="Zahraa"
-            referrerPolicy="no-referrer"
-          />
-
           <div className="admin-details">
-            <strong>Zahraa Ali</strong>
+            <strong>{adminName}</strong>
             <span>{t("Administrator")}</span>
           </div>
-
-          <ChevronDown
-            size={14}
-            className="admin-chevron"
-          />
         </div>
-
       </div>
     </header>
   );

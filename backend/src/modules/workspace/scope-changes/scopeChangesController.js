@@ -7,8 +7,19 @@ import {
 import {
   approveScopeChangeById,
   createScopeChange,
+  listScopeChangesByContract,
   rejectScopeChangeById,
 } from './scopeChangesService.js';
+
+export const listByContract = async (req, res) => {
+  const contractId = validateContractIdParam(req.params.id);
+  const data = await listScopeChangesByContract(contractId, req.user);
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+};
 
 export const create = async (req, res) => {
   const contractId = validateContractIdParam(req.params.id);

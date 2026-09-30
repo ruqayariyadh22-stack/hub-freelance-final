@@ -3,17 +3,21 @@ import {
   Sparkles,
   Star,
   CheckCircle2,
-  XCircle,
   MessageSquare,
   Clock,
-  DollarSign,
   ShieldCheck,
-  ChevronDown,
   Award,
-  Filter,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
-import { Project, Proposal } from '../../types';
+import { Project, Proposal, AiMatchingBreakdown } from '../../types';
+
+interface MatchingUsageSummary {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  configured: boolean;
+}
 
 interface ProposalsViewProps {
   projects: Project[];
@@ -23,8 +27,79 @@ interface ProposalsViewProps {
   onAcceptProposal: (proposalId: string) => void;
   onRejectProposal: (proposalId: string) => void;
   onOpenChatWithFreelancer: (freelancerId: string, freelancerName: string) => void;
+  onRunAiMatching: (projectId: string) => Promise<void>;
+  matchingLoading: boolean;
+  matchingError: string | null;
+  matchingUsage: MatchingUsageSummary | null;
   isArabic: boolean;
 }
+
+const emptyMatchingBanner = (isArabic: boolean) => (
+  <div className="bg-slate-800 text-white p-3.5 px-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-slate-600 flex items-center justify-center font-black text-sm">
+        —
+      </div>
+      <div>
+        <span className="text-xs font-extrabold tracking-wide text-white">
+          {isArabic ? 'لم يتم تشغيل المطابقة الذكية بعد' : 'AI matching not generated yet'}
+        </span>
+        <p className="text-[11px] text-slate-300">
+          {isArabic
+            ? 'اضغط "تحليل المطابقة بالذكاء الاصطناعي" لعرض النتائج الحقيقية.'
+            : 'Run AI matching to load real scores for these proposals.'}
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+const matchingBanner = (matching: AiMatchingBreakdown, isArabic: boolean) => (
+  <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-slate-900 text-white p-3.5 px-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center font-black text-sm shadow-md">
+        {matching.overallScore}%
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-extrabold tracking-wide text-white">
+            {isArabic ? 'تقييم المطابقة الذكية (AI Matching):' : 'AI Matching Score:'}
+          </span>
+          <span className="text-xs text-amber-300 font-bold">
+            {matching.overallScore >= 95
+              ? isArabic
+                ? '★ تطابق استثنائي (Top Candidate)'
+                : '★ Top Candidate'
+              : isArabic
+                ? 'تطابق محسوب'
+                : 'Scored Match'}
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-300 line-clamp-2">
+          {matching.aiRecommendation || matching.explanation || ''}
+        </p>
+      </div>
+    </div>
+
+    <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+      <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+        {isArabic ? 'المهارات:' : 'Skills:'} {matching.skillsMatch}%
+      </span>
+      <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+        {isArabic ? 'الخبرة:' : 'Exp:'} {matching.experienceMatch}%
+      </span>
+      <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+        {isArabic ? 'التخصص:' : 'Specialty:'} {matching.specialtyMatch}%
+      </span>
+      <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+        {isArabic ? 'الأعمال:' : 'Portfolio:'} {matching.portfolioRelevance}%
+      </span>
+      <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+        {isArabic ? 'التقييمات:' : 'Ratings:'} {matching.ratingsMatch}%
+      </span>
+    </div>
+  </div>
+);
 
 export const ProposalsView: React.FC<ProposalsViewProps> = ({
   projects,
@@ -34,24 +109,29 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
   onAcceptProposal,
   onRejectProposal,
   onOpenChatWithFreelancer,
+  onRunAiMatching,
+  matchingLoading,
+  matchingError,
+  matchingUsage,
   isArabic
 }) => {
   const [filterScore, setFilterScore] = useState<'all' | 'high'>('all');
 
-  // Filter proposals by project if selected
   const availableProjectsWithProposals = projects.filter((p) => p.proposalsCount > 0);
   const activeProjectId = selectedProjectId || (availableProjectsWithProposals[0]?.id ?? '');
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const displayedProposals = proposals.filter((prop) => {
     const matchesProject = activeProjectId ? prop.projectId === activeProjectId : true;
-    const matchesScore = filterScore === 'high' ? prop.aiMatching.overallScore >= 90 : true;
+    const matchesScore =
+      filterScore === 'high'
+        ? Boolean(prop.aiMatching && prop.aiMatching.overallScore >= 90)
+        : true;
     return matchesProject && matchesScore;
   });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header & Project Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -68,10 +148,20 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
               ? 'مقارنة عروض المستقلين مع تحليل الذكاء الاصطناعي لتطابق المهارات والخبرة وسابقة الأعمال'
               : 'Compare candidate proposals ranked by AI skills matching and portfolio relevance'}
           </p>
+          {matchingUsage && (
+            <p className="text-[11px] text-slate-500 mt-1">
+              {matchingUsage.configured
+                ? isArabic
+                  ? `${matchingUsage.remaining ?? 0} من ${matchingUsage.limit} استخدامات مطابقة مجانية متبقية هذا الشهر`
+                  : `${matchingUsage.remaining ?? 0} of ${matchingUsage.limit} free AI matching uses remaining this month`
+                : isArabic
+                  ? 'حد الاستخدام الشهري المجاني للمطابقة غير مُعرَّف في إعدادات النظام'
+                  : 'Monthly free matching limit is not configured in the system'}
+            </p>
+          )}
         </div>
 
-        {/* Project Selector Dropdown */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-semibold text-slate-600 shrink-0">
             {isArabic ? 'اختر المشروع:' : 'Select Project:'}
           </label>
@@ -86,10 +176,22 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            disabled={!activeProjectId || matchingLoading}
+            onClick={() => activeProjectId && onRunAiMatching(activeProjectId)}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {matchingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            <span>{isArabic ? 'تحليل المطابقة بالذكاء الاصطناعي' : 'Run AI Matching'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Selected Project Overview Card */}
+      {matchingError && (
+        <p className="text-xs font-bold text-red-600">{matchingError}</p>
+      )}
+
       {activeProject && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -98,7 +200,9 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                 {activeProject.category}
               </span>
               <span className="text-xs text-slate-400">
-                {isArabic ? `الميزانية: $${activeProject.budgetMin} - $${activeProject.budgetMax}` : `Budget: $${activeProject.budgetMin} - $${activeProject.budgetMax}`}
+                {isArabic
+                  ? `الميزانية: $${activeProject.budgetMin} - $${activeProject.budgetMax}`
+                  : `Budget: $${activeProject.budgetMin} - $${activeProject.budgetMax}`}
               </span>
             </div>
             <h2 className="text-base font-bold text-slate-900">{activeProject.title}</h2>
@@ -123,7 +227,6 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
         </div>
       )}
 
-      {/* Proposals List */}
       <div className="space-y-4">
         {displayedProposals.length === 0 ? (
           <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
@@ -141,6 +244,7 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
           displayedProposals.map((proposal) => {
             const isAccepted = proposal.status === 'accepted';
             const isRejected = proposal.status === 'rejected';
+            const matching = proposal.aiMatching;
 
             return (
               <div
@@ -149,51 +253,14 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                   isAccepted
                     ? 'border-emerald-500 ring-2 ring-emerald-100'
                     : isRejected
-                    ? 'border-slate-200 opacity-60'
-                    : 'border-slate-200/90'
+                      ? 'border-slate-200 opacity-60'
+                      : 'border-slate-200/90'
                 }`}
               >
-                {/* AI Matching Banner (from PDF requirements) */}
-                <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-slate-900 text-white p-3.5 px-5 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center font-black text-sm shadow-md">
-                      {proposal.aiMatching.overallScore}%
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-extrabold tracking-wide text-white">
-                          {isArabic ? 'تقييم المطابقة الذكية (AI Matching):' : 'AI Matching Score:'}
-                        </span>
-                        <span className="text-xs text-amber-300 font-bold">
-                          {proposal.aiMatching.overallScore >= 95
-                            ? isArabic ? '★ تطابق استثنائي (Top Candidate)' : '★ Top Candidate'
-                            : isArabic ? 'تطابق عالي جداً' : 'Strong Match'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 line-clamp-1">
-                        {proposal.aiMatching.aiRecommendation}
-                      </p>
-                    </div>
-                  </div>
+                {matching ? matchingBanner(matching, isArabic) : emptyMatchingBanner(isArabic)}
 
-                  {/* Criteria mini-badges */}
-                  <div className="flex items-center gap-2 text-[11px] font-semibold">
-                    <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
-                      {isArabic ? 'المهارات:' : 'Skills:'} {proposal.aiMatching.skillsMatch}%
-                    </span>
-                    <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
-                      {isArabic ? 'الخبرة:' : 'Exp:'} {proposal.aiMatching.experienceMatch}%
-                    </span>
-                    <span className="bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
-                      {isArabic ? 'الأعمال السابقة:' : 'Portfolio:'} {proposal.aiMatching.portfolioRelevance}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Proposal Main Body */}
                 <div className="p-5">
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-                    {/* Freelancer Profile Details */}
                     <div className="flex items-start gap-4 flex-1">
                       <img
                         src={proposal.freelancerAvatar}
@@ -211,7 +278,8 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                             <span>{proposal.freelancerRating}</span>
                           </div>
                           <span className="text-xs text-slate-400">
-                            ({proposal.freelancerCompletedCount} {isArabic ? 'مشاريع منجزة' : 'completed'})
+                            ({proposal.freelancerCompletedCount}{' '}
+                            {isArabic ? 'مشاريع منجزة' : 'completed'})
                           </span>
                         </div>
 
@@ -226,27 +294,29 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                           {proposal.coverLetter}
                         </div>
 
-                        {/* AI Key Advantages */}
-                        <div className="pt-2">
-                          <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1 mb-1">
-                            <Award className="w-3.5 h-3.5 text-purple-600" />
-                            {isArabic ? 'نقاط القوة حسب تحليل الذكاء الاصطناعي:' : 'AI Key Insights:'}
-                          </span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {proposal.aiMatching.aiPros.map((pro, i) => (
-                              <span
-                                key={i}
-                                className="text-[11px] bg-purple-50 text-purple-800 font-medium px-2.5 py-0.5 rounded-full border border-purple-200"
-                              >
-                                ✓ {pro}
-                              </span>
-                            ))}
+                        {matching && matching.aiPros.length > 0 && (
+                          <div className="pt-2">
+                            <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1 mb-1">
+                              <Award className="w-3.5 h-3.5 text-purple-600" />
+                              {isArabic
+                                ? 'نقاط القوة حسب تحليل الذكاء الاصطناعي:'
+                                : 'AI Key Insights:'}
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {matching.aiPros.map((pro, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[11px] bg-purple-50 text-purple-800 font-medium px-2.5 py-0.5 rounded-full border border-purple-200"
+                                >
+                                  ✓ {pro}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Financial Terms & Actions Card */}
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 min-w-[220px] flex flex-col justify-between gap-4 shrink-0">
                       <div>
                         <div className="text-[11px] font-semibold text-slate-400 uppercase">
@@ -258,18 +328,20 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                         <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                           <span>
-                            {isArabic ? `خلال ${proposal.proposedDurationDays} يوماً` : `In ${proposal.proposedDurationDays} days`}
+                            {isArabic
+                              ? `خلال ${proposal.proposedDurationDays} يوماً`
+                              : `In ${proposal.proposedDurationDays} days`}
                           </span>
                         </div>
                       </div>
 
-                      {/* Escrow note */}
                       <div className="text-[10px] text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-100 flex items-center gap-1.5">
                         <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{isArabic ? 'محمي بنظام الضمان المالي Escrow' : 'Protected by Escrow'}</span>
+                        <span>
+                          {isArabic ? 'محمي بنظام الضمان المالي Escrow' : 'Protected by Escrow'}
+                        </span>
                       </div>
 
-                      {/* Action buttons */}
                       <div className="space-y-2">
                         {isAccepted ? (
                           <div className="bg-emerald-600 text-white text-center py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
@@ -287,7 +359,12 @@ export const ProposalsView: React.FC<ProposalsViewProps> = ({
                             </button>
 
                             <button
-                              onClick={() => onOpenChatWithFreelancer(proposal.freelancerId, proposal.freelancerName)}
+                              onClick={() =>
+                                onOpenChatWithFreelancer(
+                                  proposal.freelancerId,
+                                  proposal.freelancerName
+                                )
+                              }
                               className="w-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-xs py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5"
                             >
                               <MessageSquare className="w-3.5 h-3.5 text-slate-500" />

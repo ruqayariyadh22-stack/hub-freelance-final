@@ -15,7 +15,9 @@ import { DisputeRecord, Contract } from '../../types';
 interface DisputesViewProps {
   disputes: DisputeRecord[];
   contracts: Contract[];
-  onOpenNewDispute: (disputeData: Omit<DisputeRecord, 'id' | 'disputeNumber' | 'filedAt' | 'status'>) => void;
+  onOpenNewDispute: (
+    disputeData: Omit<DisputeRecord, 'id' | 'disputeNumber' | 'filedAt' | 'status'>
+  ) => void | Promise<boolean | void>;
   isArabic: boolean;
 }
 
@@ -29,24 +31,34 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   const [selectedContractId, setSelectedContractId] = useState(contracts[0]?.id || '');
   const [issueType, setIssueType] = useState<DisputeRecord['issueType']>('delay');
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const contract = contracts.find((c) => c.id === selectedContractId);
-    if (!contract || !description.trim()) return;
+    if (!contract || !description.trim() || submitting) return;
 
-    onOpenNewDispute({
-      contractId: contract.id,
-      projectTitle: contract.projectTitle,
-      freelancerName: contract.freelancerName,
-      freelancerAvatar: contract.freelancerAvatar,
-      issueType,
-      description: description.trim(),
-      evidenceAttachments: ['agreement_proof.pdf', 'chat_screenshots.png']
-    });
+    setSubmitting(true);
+    try {
+      const succeeded = await onOpenNewDispute({
+        contractId: contract.id,
+        projectTitle: contract.projectTitle,
+        freelancerName: contract.freelancerName,
+        freelancerAvatar: contract.freelancerAvatar,
+        issueType,
+        description: description.trim(),
+        evidenceAttachments: []
+      });
 
-    setDescription('');
-    setShowModal(false);
+      if (succeeded === false) {
+        return;
+      }
+
+      setDescription('');
+      setShowModal(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -218,9 +230,16 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-600/20 transition-all"
+                  disabled={submitting || contracts.length === 0}
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-600/20 transition-all disabled:opacity-60 disabled:pointer-events-none"
                 >
-                  {isArabic ? 'تأكيد وإرسال البلاغ' : 'Submit Dispute'}
+                  {submitting
+                    ? isArabic
+                      ? 'جاري الإرسال...'
+                      : 'Submitting...'
+                    : isArabic
+                      ? 'تأكيد وإرسال البلاغ'
+                      : 'Submit Dispute'}
                 </button>
               </div>
             </form>

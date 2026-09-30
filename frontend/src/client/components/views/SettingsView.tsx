@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   User,
   Building2,
@@ -15,16 +15,20 @@ import { ClientProfile } from '../../types';
 
 interface SettingsViewProps {
   clientProfile: ClientProfile;
-  onUpdateProfile: (updated: Partial<ClientProfile>) => void;
+  onUpdateProfile: (updated: Partial<ClientProfile>) => Promise<boolean> | boolean;
   isArabic: boolean;
   toggleLanguage: () => void;
+  profileLoading?: boolean;
+  profileError?: string;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   clientProfile,
   onUpdateProfile,
   isArabic,
-  toggleLanguage
+  toggleLanguage,
+  profileLoading = false,
+  profileError = ''
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'security' | 'notifications'>('profile');
   const [formData, setFormData] = useState({
@@ -37,12 +41,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     website: clientProfile.website
   });
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    setFormData({
+      name: clientProfile.name,
+      companyName: clientProfile.companyName,
+      email: clientProfile.email,
+      phone: clientProfile.phone,
+      bio: clientProfile.bio,
+      location: clientProfile.location,
+      website: clientProfile.website
+    });
+  }, [clientProfile]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile(formData);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    if (isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const succeeded = await onUpdateProfile(formData);
+      if (succeeded) {
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -57,6 +85,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             ? 'إدارة بيانات حساب العميل، تفاصيل الشركة والمؤسسة، وتفضيلات الأمان والإشعارات'
             : 'Manage company information, account preferences, and security credentials'}
         </p>
+        {profileLoading && (
+          <p className="text-xs text-slate-500 mt-2">
+            {isArabic ? 'جاري تحميل الملف الشخصي...' : 'Loading profile...'}
+          </p>
+        )}
+        {profileError && (
+          <p className="text-xs font-bold text-red-600 mt-2">
+            {isArabic
+              ? profileError === 'Unable to load profile.'
+                ? 'تعذر تحميل الملف الشخصي.'
+                : profileError === 'Unable to update profile.'
+                  ? 'تعذر حفظ الملف الشخصي.'
+                  : profileError
+              : profileError}
+          </p>
+        )}
       </div>
 
       {/* Tabs matching Screen 10 */}
@@ -225,7 +269,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 active:scale-95"
+              disabled={isSaving}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               <span>{isArabic ? 'حفظ التعديلات' : 'Save Changes'}</span>

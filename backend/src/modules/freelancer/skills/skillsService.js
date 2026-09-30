@@ -4,6 +4,7 @@ import {
   findFreelancerSkill,
   findSkillById,
   insertFreelancerSkill,
+  listSkillNamesByFreelancerId,
 } from './skillsPersistence.js';
 
 const toPublicFreelancerSkill = (link) => ({
@@ -11,6 +12,22 @@ const toPublicFreelancerSkill = (link) => ({
   freelancer_id: link.freelancer_id,
   skill_id: link.skill_id,
 });
+
+const toPublicSkill = (skill) => ({
+  id: skill.id,
+  name: skill.name,
+});
+
+export const listFreelancerSkills = async (freelancerId) => {
+  const profile = await findFreelancerProfileById(freelancerId);
+
+  if (!profile) {
+    throw new AppError('Freelancer not found', 404);
+  }
+
+  const skills = await listSkillNamesByFreelancerId(freelancerId);
+  return skills.map(toPublicSkill);
+};
 
 export const addFreelancerSkill = async (freelancerId, actor, payload) => {
   const profile = await findFreelancerProfileById(freelancerId);

@@ -9,6 +9,7 @@ import { findContractById } from '../contracts/contractsPersistence.js';
 import {
   findScopeChangeById,
   insertScopeChange,
+  listScopeChangesByContractId,
   updateScopeChangeStatusById,
 } from './scopeChangesPersistence.js';
 
@@ -66,6 +67,27 @@ const assertContractClient = async (contract, actor) => {
   }
 
   throw new AppError('Forbidden: insufficient role', 403);
+};
+
+const assertContractParticipant = async (contract, actor) => {
+  if (actor?.role === 'client') {
+    await assertContractClient(contract, actor);
+    return;
+  }
+
+  if (actor?.role === 'freelancer') {
+    await assertContractFreelancer(contract, actor);
+    return;
+  }
+
+  throw new AppError('Forbidden: insufficient role', 403);
+};
+
+export const listScopeChangesByContract = async (contractId, actor) => {
+  const contract = requireContract(await findContractById(contractId));
+  await assertContractParticipant(contract, actor);
+  const rows = await listScopeChangesByContractId(contract.id);
+  return rows.map(toPublicScopeChange);
 };
 
 export const createScopeChange = async (contractId, actor, payload) => {

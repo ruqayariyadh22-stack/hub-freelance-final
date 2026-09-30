@@ -75,6 +75,32 @@ export const findContractByProjectId = async (projectId, executor = query) => {
   return result.rows[0] || null;
 };
 
+export const listContractsByClientId = async (clientId, executor = query) => {
+  const result = await runQuery(
+    executor,
+    `SELECT ${CONTRACT_COLUMNS}
+     FROM contracts
+     WHERE client_id = $1
+     ORDER BY id DESC`,
+    [clientId],
+  );
+
+  return result.rows;
+};
+
+export const listContractsByFreelancerId = async (freelancerId, executor = query) => {
+  const result = await runQuery(
+    executor,
+    `SELECT ${CONTRACT_COLUMNS}
+     FROM contracts
+     WHERE freelancer_id = $1
+     ORDER BY id DESC`,
+    [freelancerId],
+  );
+
+  return result.rows;
+};
+
 export const insertContract = async (
   {
     projectId,
@@ -97,7 +123,7 @@ export const insertContract = async (
        delivery_date,
        payment_status
      )
-     VALUES ($1, $2, $3, $4, NULL, 'in_progress', CURRENT_DATE, NULL, 'pending')
+     VALUES ($1, $2, $3, $4, NULL, 'awaiting_escrow', CURRENT_DATE, NULL, 'pending')
      RETURNING ${CONTRACT_COLUMNS}`,
     [projectId, clientId, freelancerId, contractValue],
   );
@@ -105,8 +131,13 @@ export const insertContract = async (
   return result.rows[0];
 };
 
-export const updateContractStatusById = async (contractId, status) => {
-  const result = await query(
+export const updateContractStatusById = async (
+  contractId,
+  status,
+  executor = query,
+) => {
+  const result = await runQuery(
+    executor,
     `UPDATE contracts
      SET status = $1
      WHERE id = $2

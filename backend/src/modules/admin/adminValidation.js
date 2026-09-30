@@ -201,9 +201,24 @@ export const validateAdminProjectPatch = (body = {}) => {
 
 export const validateAdminSubscriptionPatch = (body = {}) => {
   return validateStatusOnlyPatch(body, {
-    allowedStatuses: null,
-    statusMessage: 'Status must be a non-empty string',
+    allowedStatuses: ['active', 'expired', 'cancelled'],
+    statusMessage: 'Status must be active, expired, or cancelled',
   });
+};
+
+export const validateAdminListQuery = (query = {}) => {
+  const page = Number(query.page);
+  const limit = Number(query.limit);
+
+  return {
+    page: Number.isFinite(page) && page >= 1 ? Math.trunc(page) : 1,
+    limit: Number.isFinite(limit) && limit >= 1 ? Math.min(Math.trunc(limit), 100) : 20,
+    search: typeof query.search === 'string' ? query.search.trim() : '',
+    status: typeof query.status === 'string' ? query.status.trim() : '',
+    role: typeof query.role === 'string' ? query.role.trim() : '',
+    plan: typeof query.plan === 'string' ? query.plan.trim() : '',
+    type: typeof query.type === 'string' ? query.type.trim() : '',
+  };
 };
 
 export const validateAdminDisputePatch = (body = {}) => {

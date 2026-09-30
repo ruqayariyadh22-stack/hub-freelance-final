@@ -1,357 +1,168 @@
-import React, { useState } from 'react';
-import {
-  CircleDollarSign,
-  Search,
-  ShieldCheck,
-  WalletCards
-} from 'lucide-react';
-
+import React, { useEffect, useMemo, useState } from 'react';
+import { CircleDollarSign, Search, ShieldCheck, WalletCards } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { transactions as initialTransactions } from '../freelance-data';
-import {
-  Card,
-  Modal,
-  PageHeader,
-  Stat,
-  Status
-} from '../components/freelance-UI';
+import { Card, Empty, PageHeader, Stat, Status } from '../components/freelance-UI';
+import { errorMessage, formatMoney, freelancerGet } from '../api';
 
-export default function Wallet({ lang, notify }) {
-  const [balance, setBalance] = useState(4250);
-  const [transactionList, setTransactionList] = useState(
-    initialTransactions
-  );
-
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('bank');
+export default function Wallet({ lang }) {
+  const [wallet, setWallet] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
 
-  const openWithdraw = () => {
-    setAmount('');
-    setMethod('bank');
-    setOpen(true);
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [walletData, txData] = await Promise.all([
+        freelancerGet('/wallet'),
+        freelancerGet('/wallet/transactions'),
+      ]);
+      setWallet(walletData);
+      setTransactions(Array.isArray(txData) ? txData : []);
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'تعذر تحميل المحفظة', 'Failed to load wallet')));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleWithdraw = () => {
-    const value = Number(amount);
+  useEffect(() => {
+    load();
+  }, []);
 
-    if (!value || value <= 0) {
-      notify(
-        t(
-          lang,
-          'أدخل مبلغاً صحيحاً للسحب',
-          'Enter a valid withdrawal amount'
-        )
-      );
-      return;
-    }
-
-    if (value > balance) {
-      notify(
-        t(
-          lang,
-          'المبلغ أكبر من الرصيد المتاح',
-          'Amount exceeds your available balance'
-        )
-      );
-      return;
-    }
-
-    const newTransaction = [
-      `TX-${Math.floor(1000 + Math.random() * 9000)}`,
-      t(
-        lang,
-        'طلب سحب من المحفظة',
-        'Wallet withdrawal request'
-      ),
-      `-$${value}`,
-      '-',
-      new Date().toISOString().slice(0, 10),
-      'active'
-    ];
-
-    setBalance(prev => prev - value);
-
-    setTransactionList(prev => [
-      newTransaction,
-      ...prev
-    ]);
-
-    setOpen(false);
-    setAmount('');
-
-    notify(
-      t(
-        lang,
-        `تم إرسال طلب سحب بقيمة $${value}`,
-        `Withdrawal request of $${value} submitted`
-      )
-    );
-  };
-
-  const filteredTransactions = transactionList.filter(row =>
-    row[0].toLowerCase().includes(search.toLowerCase()) ||
-    row[1].toLowerCase().includes(search.toLowerCase())
+  const releaseEarnings = useMemo(
+    () =>
+      transactions
+        .filter((tx) => tx.type === 'release')
+        .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0),
+    [transactions],
   );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return transactions;
+    return transactions.filter((tx) =>
+      `${tx.id} ${tx.type} ${tx.contract_id} ${tx.amount} ${tx.commission}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [transactions, search]);
 
   return (
     <>
       <PageHeader
         lang={lang}
-        titleAr="المحفظة والمدفوعات"
-        titleEn="Wallet & Payments"
-        subAr="تابع رصيدك المتاح، المبالغ المحجوزة، والعمليات المالية."
-        subEn="Track available balance, escrow, and transaction activity."
-        action={
-          <button
-            className="primary"
-            onClick={openWithdraw}
-          >
-            <CircleDollarSign size={15} />
-            {t(lang, 'سحب الرصيد', 'Withdraw')}
-          </button>
-        }
+        titleAr="المحفظة والضمان"
+        titleEn="Wallet & Escrow"
+        subAr="رصيدك ومعاملاتك الفعلية من النظام. عمولة المنصة 5% عند التحرير."
+        subEn="Your live balance and transactions. Platform commission is 5% on release."
       />
 
-      <div className="stats-grid">
-        <Stat
-          lang={lang}
-          icon={WalletCards}
-          labelAr="الرصيد المتاح"
-          labelEn="Available balance"
-          value={`$${balance.toLocaleString()}`}
-        />
+      {loading && <Card><p>{t(lang, 'جاري التحميل...', 'Loading...')}</p></Card>}
+      {error && (
+        <Card>
+          <p className="notice amber">{error}</p>
+          <button className="primary" type="button" onClick={load}>
+            {t(lang, 'إعادة المحاولة', 'Retry')}
+          </button>
+        </Card>
+      )}
 
-        <Stat
-          lang={lang}
-          icon={ShieldCheck}
-          labelAr="المحجوز بالضمان"
-          labelEn="In escrow"
-          value="$1,850"
-          tone="amber"
-        />
-
-        <Stat
-          lang={lang}
-          icon={CircleDollarSign}
-          labelAr="إجمالي المحول"
-          labelEn="Total transferred"
-          value="$6,760"
-          tone="green"
-        />
-      </div>
-
-      <Card>
-        <div className="card-head">
-          <div>
-            <h3>
-              {t(lang, 'كل المعاملات', 'All transactions')}
-            </h3>
-
-            <p>
-              {t(
-                lang,
-                'إيداعات وضمان وتحرير دفعات وسحب',
-                'Deposits, escrow, releases, and withdrawals'
-              )}
-            </p>
-          </div>
-
-          <div className="input-search compact">
-            <Search size={15} />
-
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={t(
-                lang,
-                'ابحث برقم العملية...',
-                'Search transaction ID...'
-              )}
+      {!loading && !error && (
+        <>
+          <div className="stats-grid">
+            <Stat
+              lang={lang}
+              icon={CircleDollarSign}
+              labelAr="الرصيد المتاح"
+              labelEn="Available Balance"
+              value={formatMoney(wallet?.balance)}
+            />
+            <Stat
+              lang={lang}
+              icon={ShieldCheck}
+              labelAr="في الضمان"
+              labelEn="In Escrow"
+              value={formatMoney(wallet?.escrow_balance)}
+              tone="amber"
+            />
+            <Stat
+              lang={lang}
+              icon={WalletCards}
+              labelAr="أرباح محرّرة"
+              labelEn="Released Earnings"
+              value={formatMoney(releaseEarnings)}
+              tone="green"
             />
           </div>
-        </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{t(lang, 'العملية', 'Transaction')}</th>
-                <th>{t(lang, 'البيان', 'Description')}</th>
-                <th>{t(lang, 'المبلغ', 'Amount')}</th>
-                <th>{t(lang, 'العمولة', 'Fee')}</th>
-                <th>{t(lang, 'التاريخ', 'Date')}</th>
-                <th>{t(lang, 'الحالة', 'Status')}</th>
-              </tr>
-            </thead>
+          <p className="notice amber">
+            {t(
+              lang,
+              'سحب الرصيد إلى بنك غير متاح عبر واجهة برمجية حالياً. لا يوجد محاكاة للسحب.',
+              'Bank withdrawal is not available via API. Withdrawal is not simulated.',
+            )}
+          </p>
 
-            <tbody>
-              {filteredTransactions.map(row => (
-                <tr key={row[0]}>
-                  <td>
-                    <b>{row[0]}</b>
-                  </td>
-
-                  <td>{row[1]}</td>
-
-                  <td>
-                    <strong>{row[2]}</strong>
-                  </td>
-
-                  <td>{row[3]}</td>
-
-                  <td>{row[4]}</td>
-
-                  <td>
-                    <Status
-                      lang={lang}
-                      type={row[5]}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {open && (
-        <Modal
-          lang={lang}
-          titleAr="سحب الرصيد"
-          titleEn="Withdraw Balance"
-          onClose={() => setOpen(false)}
-        >
-          <div className="form-grid">
-
-            <label className="full">
-              {t(
-                lang,
-                'المبلغ المطلوب سحبه',
-                'Withdrawal amount'
-              )}
-
-              <div className="input-money">
-                <span>$</span>
-
+          <Card>
+            <div className="card-head">
+              <div>
+                <h3>{t(lang, 'المعاملات', 'Transactions')}</h3>
+                <p>{t(lang, 'سجل مالي حقيقي', 'Live financial history')}</p>
+              </div>
+              <div className="input-search compact">
+                <Search size={14} />
                 <input
-                  type="number"
-                  min="1"
-                  max={balance}
-                  value={amount}
-                  onChange={e =>
-                    setAmount(e.target.value)
-                  }
-                  placeholder="0"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t(lang, 'بحث...', 'Search...')}
                 />
               </div>
-
-              <small>
-                {t(
-                  lang,
-                  `الرصيد المتاح: $${balance.toLocaleString()}`,
-                  `Available balance: $${balance.toLocaleString()}`
-                )}
-              </small>
-            </label>
-
-            <label className="full">
-              {t(
-                lang,
-                'طريقة السحب',
-                'Withdrawal method'
-              )}
-
-              <select
-                value={method}
-                onChange={e =>
-                  setMethod(e.target.value)
-                }
-              >
-                <option value="bank">
-                  {t(
-                    lang,
-                    'حساب بنكي',
-                    'Bank Account'
-                  )}
-                </option>
-
-                <option value="card">
-                  {t(
-                    lang,
-                    'بطاقة مصرفية',
-                    'Bank Card'
-                  )}
-                </option>
-
-                <option value="wallet">
-                  {t(
-                    lang,
-                    'محفظة إلكترونية',
-                    'Digital Wallet'
-                  )}
-                </option>
-              </select>
-            </label>
-
-            <div className="withdraw-summary full">
-              <div>
-                <span>
-                  {t(
-                    lang,
-                    'المبلغ المطلوب',
-                    'Requested amount'
-                  )}
-                </span>
-
-                <strong>
-                  ${Number(amount || 0).toLocaleString()}
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  {t(
-                    lang,
-                    'الرصيد بعد السحب',
-                    'Balance after withdrawal'
-                  )}
-                </span>
-
-                <strong>
-                  $
-                  {Math.max(
-                    balance - Number(amount || 0),
-                    0
-                  ).toLocaleString()}
-                </strong>
-              </div>
             </div>
-
-          </div>
-
-          <div className="modal-actions">
-            <button
-              className="ghost"
-              onClick={() => setOpen(false)}
-            >
-              {t(lang, 'إلغاء', 'Cancel')}
-            </button>
-
-            <button
-              className="primary"
-              onClick={handleWithdraw}
-            >
-              <CircleDollarSign size={15} />
-              {t(
-                lang,
-                'تأكيد السحب',
-                'Confirm Withdrawal'
-              )}
-            </button>
-          </div>
-        </Modal>
+            {filtered.length === 0 ? (
+              <Empty
+                lang={lang}
+                titleAr="لا معاملات"
+                titleEn="No transactions"
+                bodyAr="لا توجد معاملات في محفظتك بعد."
+                bodyEn="You have no wallet transactions yet."
+              />
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>{t(lang, 'النوع', 'Type')}</th>
+                      <th>{t(lang, 'المبلغ', 'Amount')}</th>
+                      <th>{t(lang, 'العمولة', 'Commission')}</th>
+                      <th>{t(lang, 'العقد', 'Contract')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((tx) => (
+                      <tr key={tx.id}>
+                        <td>#{tx.id}</td>
+                        <td>
+                          <Status lang={lang} type={tx.type} />
+                        </td>
+                        <td>
+                          <strong>{formatMoney(tx.amount)}</strong>
+                        </td>
+                        <td>
+                          {tx.commission == null ? '—' : formatMoney(tx.commission)}
+                        </td>
+                        <td>{tx.contract_id != null ? `#${tx.contract_id}` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </>
       )}
     </>
   );

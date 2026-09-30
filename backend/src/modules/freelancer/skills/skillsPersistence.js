@@ -33,6 +33,19 @@ export const findFreelancerSkill = async (freelancerId, skillId) => {
   return result.rows[0] || null;
 };
 
+export const listSkillNamesByFreelancerId = async (freelancerId) => {
+  const result = await query(
+    `SELECT s.id, s.name
+     FROM freelancer_skills fs
+     INNER JOIN skills s ON s.id = fs.skill_id
+     WHERE fs.freelancer_id = $1
+     ORDER BY s.name ASC`,
+    [freelancerId],
+  );
+
+  return result.rows;
+};
+
 export const insertFreelancerSkill = async (freelancerId, skillId) => {
   const result = await query(
     `INSERT INTO freelancer_skills (

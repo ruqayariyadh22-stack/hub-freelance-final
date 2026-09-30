@@ -15,16 +15,36 @@ import {
   insertSubscription,
   listSubscriptionsByFreelancerId,
   lockActiveSubscriptionByFreelancerId,
+  lockActiveSubscriptionByClientId,
   markSubscriptionCancelAtPeriodEnd,
 } from './subscriptionsPersistence.js';
+import { findClientProfileByUserId } from '../projects/projectsPersistence.js';
 
 import {
   MONTHLY_ADS_LIMIT,
+  MONTHLY_CLIENT_FREELANCER_MATCHING_LIMIT,
   PAID_ENTITLEMENTS,
+  CLIENT_PAID_AI_ENTITLEMENTS,
+  CLIENT_AI_PLAN_TYPE,
+  CLIENT_AI_PLAN_PRICE,
+  CLIENT_AI_PLAN_DURATION_DAYS,
   isPaidEntitlement,
+  isClientPaidAiEntitlement,
+  clientAiPlanGrantsEntitlement,
 } from './entitlements.js';
 
-export { MONTHLY_ADS_LIMIT, PAID_ENTITLEMENTS, isPaidEntitlement };
+export {
+  MONTHLY_ADS_LIMIT,
+  MONTHLY_CLIENT_FREELANCER_MATCHING_LIMIT,
+  PAID_ENTITLEMENTS,
+  CLIENT_PAID_AI_ENTITLEMENTS,
+  CLIENT_AI_PLAN_TYPE,
+  CLIENT_AI_PLAN_PRICE,
+  CLIENT_AI_PLAN_DURATION_DAYS,
+  isPaidEntitlement,
+  isClientPaidAiEntitlement,
+  clientAiPlanGrantsEntitlement,
+};
 
 const FREELANCER_PRO_PLAN = {
   plan_type: 'Freelancer Pro',
@@ -40,11 +60,21 @@ const FREELANCER_PRO_PLAN = {
   ],
 };
 
+const CLIENT_AI_PLAN = {
+  plan_type: CLIENT_AI_PLAN_TYPE,
+  price: CLIENT_AI_PLAN_PRICE,
+  duration_days: CLIENT_AI_PLAN_DURATION_DAYS,
+  currency: 'IQD',
+  benefits: ['Description Assistant'],
+  entitlements: [CLIENT_PAID_AI_ENTITLEMENTS.DESCRIPTION_ASSISTANT],
+};
+
 const TRANSACTION_TYPE_WITHDRAWAL = 'withdrawal';
 
 const toPublicSubscription = (subscription) => ({
   id: subscription.id,
-  freelancer_id: subscription.freelancer_id,
+  freelancer_id: subscription.freelancer_id ?? null,
+  client_id: subscription.client_id ?? null,
   plan_type: subscription.plan_type,
   price: subscription.price,
   start_date: subscription.start_date,
@@ -82,6 +112,16 @@ const requireFreelancerProfile = async (actor) => {
   return profile;
 };
 
+const requireClientProfile = async (actor) => {
+  const profile = await findClientProfileByUserId(actor.id);
+
+  if (!profile) {
+    throw new AppError('Client not found', 404);
+  }
+
+  return profile;
+};
+
 const requireCurrentSubscription = (subscription) => {
   if (!subscription) {
     throw new AppError('Subscription not found', 404);
@@ -100,8 +140,7 @@ const requireLockedWallet = async (actor, client) => {
   return wallet;
 };
 
-const deductPlanFromWallet = async (wallet, client) => {
-  const price = FREELANCER_PRO_PLAN.price;
+const deductPlanFromWallet = async (wallet, price, client) => {
   const available = parseStoredMoney(wallet.balance, 'balance');
 
   if (available < price) {
@@ -132,8 +171,16 @@ const deductPlanFromWallet = async (wallet, client) => {
   return updatedWallet;
 };
 
-export const listSubscriptionPlans = async () => {
-  return [FREELANCER_PRO_PLAN];
+export const listSubscriptionPlans = async (actor) => {
+  if (actor?.role === 'client') {
+    return [CLIENT_AI_PLAN];
+  }
+
+  if (actor?.role === 'freelancer') {
+    return [FREELANCER_PRO_PLAN];
+  }
+
+  throw new AppError('Forbidden: insufficient role', 403);
 };
 
 export const listMySubscriptionHistory = async (actor) => {
@@ -143,103 +190,212 @@ export const listMySubscriptionHistory = async (actor) => {
 };
 
 export const getMySubscription = async (actor) => {
-  const profile = await requireFreelancerProfile(actor);
+  if (actor?.role === 'client') {
+    const profile = await requireClientProfile(actor);
+    const subscription = await withTransaction(async (client) => {
+      return lockActiveSubscriptionByClientId(profile.id, client);
+    });
+    return toPublicSubscription(requireCurrentSubscription(subscription));
+  }
 
-  const subscription = await withTransaction(async (client) => {
-    return lockActiveSubscriptionByFreelancerId(profile.id, client);
-  });
+  if (actor?.role === 'freelancer') {
+    const profile = await requireFreelancerProfile(actor);
+    const subscription = await withTransaction(async (client) => {
+      return lockActiveSubscriptionByFreelancerId(profile.id, client);
+    });
+    return toPublicSubscription(requireCurrentSubscription(subscription));
+  }
 
-  return toPublicSubscription(requireCurrentSubscription(subscription));
+  throw new AppError('Forbidden: insufficient role', 403);
 };
 
 export const subscribe = async (actor) => {
-  const profile = await requireFreelancerProfile(actor);
+  if (actor?.role === 'client') {
+    const profile = await requireClientProfile(actor);
 
-  try {
-    return await withTransaction(async (client) => {
-      const wallet = await requireLockedWallet(actor, client);
-      const active = await lockActiveSubscriptionByFreelancerId(
-        profile.id,
-        client,
-      );
+    try {
+      return await withTransaction(async (client) => {
+        const wallet = await requireLockedWallet(actor, client);
+        const active = await lockActiveSubscriptionByClientId(profile.id, client);
 
-      if (active) {
+        if (active) {
+          throw new AppError('An active subscription already exists', 409);
+        }
+
+        await deductPlanFromWallet(wallet, CLIENT_AI_PLAN.price, client);
+
+        const created = await insertSubscription(
+          {
+            clientId: profile.id,
+            planType: CLIENT_AI_PLAN.plan_type,
+            price: CLIENT_AI_PLAN.price,
+          },
+          client,
+        );
+
+        return toPublicSubscription(created);
+      });
+    } catch (error) {
+      if (error?.code === '23505') {
         throw new AppError('An active subscription already exists', 409);
       }
 
-      await deductPlanFromWallet(wallet, client);
-
-      const created = await insertSubscription(
-        {
-          freelancerId: profile.id,
-          planType: FREELANCER_PRO_PLAN.plan_type,
-          price: FREELANCER_PRO_PLAN.price,
-        },
-        client,
-      );
-
-      return toPublicSubscription(created);
-    });
-  } catch (error) {
-    if (error?.code === '23505') {
-      throw new AppError('An active subscription already exists', 409);
+      throw error;
     }
-
-    throw error;
   }
+
+  if (actor?.role === 'freelancer') {
+    const profile = await requireFreelancerProfile(actor);
+
+    try {
+      return await withTransaction(async (client) => {
+        const wallet = await requireLockedWallet(actor, client);
+        const active = await lockActiveSubscriptionByFreelancerId(
+          profile.id,
+          client,
+        );
+
+        if (active) {
+          throw new AppError('An active subscription already exists', 409);
+        }
+
+        await deductPlanFromWallet(wallet, FREELANCER_PRO_PLAN.price, client);
+
+        const created = await insertSubscription(
+          {
+            freelancerId: profile.id,
+            planType: FREELANCER_PRO_PLAN.plan_type,
+            price: FREELANCER_PRO_PLAN.price,
+          },
+          client,
+        );
+
+        return toPublicSubscription(created);
+      });
+    } catch (error) {
+      if (error?.code === '23505') {
+        throw new AppError('An active subscription already exists', 409);
+      }
+
+      throw error;
+    }
+  }
+
+  throw new AppError('Forbidden: insufficient role', 403);
 };
 
 export const cancelMySubscription = async (actor) => {
-  const profile = await requireFreelancerProfile(actor);
+  if (actor?.role === 'client') {
+    const profile = await requireClientProfile(actor);
 
-  return withTransaction(async (client) => {
-    const current = requireCurrentSubscription(
-      await lockActiveSubscriptionByFreelancerId(profile.id, client),
-    );
+    return withTransaction(async (client) => {
+      const current = requireCurrentSubscription(
+        await lockActiveSubscriptionByClientId(profile.id, client),
+      );
 
-    if (current.cancel_at_period_end) {
-      return toPublicSubscription(current);
-    }
+      if (current.cancel_at_period_end) {
+        return toPublicSubscription(current);
+      }
 
-    const updated = await markSubscriptionCancelAtPeriodEnd(current.id, client);
-    return toPublicSubscription(requireCurrentSubscription(updated));
-  });
-};
+      const updated = await markSubscriptionCancelAtPeriodEnd(current.id, client);
+      return toPublicSubscription(requireCurrentSubscription(updated));
+    });
+  }
 
-export const renewMySubscription = async (actor) => {
-  const profile = await requireFreelancerProfile(actor);
+  if (actor?.role === 'freelancer') {
+    const profile = await requireFreelancerProfile(actor);
 
-  try {
-    return await withTransaction(async (client) => {
-      const wallet = await requireLockedWallet(actor, client);
+    return withTransaction(async (client) => {
       const current = requireCurrentSubscription(
         await lockActiveSubscriptionByFreelancerId(profile.id, client),
       );
 
       if (current.cancel_at_period_end) {
-        throw new AppError(
-          'Subscription is set to cancel at period end',
-          409,
-        );
+        return toPublicSubscription(current);
       }
 
-      await deductPlanFromWallet(wallet, client);
-
-      const renewed = await extendSubscriptionEndDate(current.id, client);
-
-      if (!renewed) {
-        throw new AppError('Subscription not found', 404);
-      }
-
-      return toPublicSubscription(renewed);
+      const updated = await markSubscriptionCancelAtPeriodEnd(current.id, client);
+      return toPublicSubscription(requireCurrentSubscription(updated));
     });
-  } catch (error) {
-    if (error?.code === '23505') {
-      throw new AppError('An active subscription already exists', 409);
-    }
-
-    throw error;
   }
+
+  throw new AppError('Forbidden: insufficient role', 403);
+};
+
+export const renewMySubscription = async (actor) => {
+  if (actor?.role === 'client') {
+    const profile = await requireClientProfile(actor);
+
+    try {
+      return await withTransaction(async (client) => {
+        const wallet = await requireLockedWallet(actor, client);
+        const current = requireCurrentSubscription(
+          await lockActiveSubscriptionByClientId(profile.id, client),
+        );
+
+        if (current.cancel_at_period_end) {
+          throw new AppError(
+            'Subscription is set to cancel at period end',
+            409,
+          );
+        }
+
+        await deductPlanFromWallet(wallet, CLIENT_AI_PLAN.price, client);
+
+        const renewed = await extendSubscriptionEndDate(current.id, client);
+
+        if (!renewed) {
+          throw new AppError('Subscription not found', 404);
+        }
+
+        return toPublicSubscription(renewed);
+      });
+    } catch (error) {
+      if (error?.code === '23505') {
+        throw new AppError('An active subscription already exists', 409);
+      }
+
+      throw error;
+    }
+  }
+
+  if (actor?.role === 'freelancer') {
+    const profile = await requireFreelancerProfile(actor);
+
+    try {
+      return await withTransaction(async (client) => {
+        const wallet = await requireLockedWallet(actor, client);
+        const current = requireCurrentSubscription(
+          await lockActiveSubscriptionByFreelancerId(profile.id, client),
+        );
+
+        if (current.cancel_at_period_end) {
+          throw new AppError(
+            'Subscription is set to cancel at period end',
+            409,
+          );
+        }
+
+        await deductPlanFromWallet(wallet, FREELANCER_PRO_PLAN.price, client);
+
+        const renewed = await extendSubscriptionEndDate(current.id, client);
+
+        if (!renewed) {
+          throw new AppError('Subscription not found', 404);
+        }
+
+        return toPublicSubscription(renewed);
+      });
+    } catch (error) {
+      if (error?.code === '23505') {
+        throw new AppError('An active subscription already exists', 409);
+      }
+
+      throw error;
+    }
+  }
+
+  throw new AppError('Forbidden: insufficient role', 403);
 };
 
 export const assertPaidEntitlement = async (actor, entitlement, executor) => {
@@ -269,6 +425,51 @@ export const assertPaidEntitlement = async (actor, entitlement, executor) => {
 
   return {
     profile,
+    subscription: toPublicSubscription(subscription),
+    entitlement,
+  };
+};
+
+/**
+ * Server-side Client AI entitlement check.
+ * Requires an active Client AI subscription for the authenticated Client's profile.
+ */
+export const assertClientPaidAiEntitlement = async (
+  actor,
+  entitlement,
+  executor,
+) => {
+  if (!actor?.id) {
+    throw new AppError('Authentication required', 401);
+  }
+
+  if (!isClientPaidAiEntitlement(entitlement)) {
+    throw new AppError('Validation failed', 400, [
+      { field: 'entitlement', message: 'Entitlement is invalid' },
+    ]);
+  }
+
+  const clientProfile = await findClientProfileByUserId(actor.id);
+  if (!clientProfile) {
+    throw new AppError('Client not found', 404);
+  }
+
+  const resolveCurrent = (client) =>
+    lockActiveSubscriptionByClientId(clientProfile.id, client);
+
+  const subscription = executor
+    ? await resolveCurrent(executor)
+    : await withTransaction(resolveCurrent);
+
+  if (
+    !subscription ||
+    !clientAiPlanGrantsEntitlement(subscription.plan_type, entitlement)
+  ) {
+    throw new AppError('Forbidden: paid entitlement required', 403);
+  }
+
+  return {
+    profile: clientProfile,
     subscription: toPublicSubscription(subscription),
     entitlement,
   };

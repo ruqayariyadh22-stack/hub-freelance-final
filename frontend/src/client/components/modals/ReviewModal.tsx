@@ -12,7 +12,13 @@ interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   contract: Contract | null;
-  onSubmitReview: (contractId: string, rating: number, feedback: string, tags: string[]) => void;
+  onSubmitReview: (
+    contractId: string,
+    rating: number,
+    feedback: string,
+    tags: string[]
+  ) => boolean | Promise<boolean>;
+  submitError?: string;
   isArabic: boolean;
 }
 
@@ -21,11 +27,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   onClose,
   contract,
   onSubmitReview,
+  submitError,
   isArabic
 }) => {
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
   const [feedback, setFeedback] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([
     isArabic ? 'احترافية عالية' : 'Professionalism',
     isArabic ? 'دقة بالمواعيد' : 'On-time Delivery'
@@ -45,11 +53,18 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!feedback.trim()) return;
-    onSubmitReview(contract.id, rating, feedback.trim(), selectedTags);
-    onClose();
+    if (!feedback.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const succeeded = await onSubmitReview(contract.id, rating, feedback.trim(), selectedTags);
+      if (succeeded) {
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -172,6 +187,16 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
             />
           </div>
 
+          {submitError && (
+            <p className="text-xs font-bold text-red-600">
+              {isArabic
+                ? submitError === 'Unable to submit review.'
+                  ? 'تعذر إرسال التقييم.'
+                  : submitError
+                : submitError}
+            </p>
+          )}
+
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
@@ -182,7 +207,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
             </button>
             <button
               type="submit"
-              className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95"
+              disabled={isSubmitting}
+              className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-60"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{isArabic ? 'نشر التقييم' : 'Submit Review'}</span>

@@ -16,7 +16,13 @@ import {
   findAdminUserById,
   getAdminCounts,
   listAdminContracts as listAdminContractRows,
+  listAdminDisputes as listAdminDisputeRows,
   listAdminPayments as listAdminPaymentRows,
+  listAdminProjects as listAdminProjectRows,
+  listAdminReviews as listAdminReviewRows,
+  listAdminServices as listAdminServiceRows,
+  listAdminSubscriptions as listAdminSubscriptionRows,
+  listAdminUsers as listAdminUserRows,
   updateAdminDisputeFields,
   updateAdminProjectStatus,
   updateAdminServiceStatus,
@@ -38,6 +44,7 @@ const toPublicUser = (user) => ({
 const toPublicService = (service) => ({
   id: service.id,
   freelancer_id: service.freelancer_id,
+  freelancer_name: service.freelancer_name ?? null,
   title: service.title,
   description: service.description,
   category: service.category,
@@ -49,6 +56,7 @@ const toPublicService = (service) => ({
 const toPublicProject = (project) => ({
   id: project.id,
   client_id: project.client_id,
+  client_name: project.client_name ?? null,
   title: project.title,
   description: project.description,
   category: project.category,
@@ -65,8 +73,11 @@ const toPublicProject = (project) => ({
 const toPublicContract = (contract) => ({
   id: contract.id,
   project_id: contract.project_id,
+  project_title: contract.project_title ?? null,
   client_id: contract.client_id,
+  client_name: contract.client_name ?? null,
   freelancer_id: contract.freelancer_id,
+  freelancer_name: contract.freelancer_name ?? null,
   contract_value: contract.contract_value,
   commission: contract.commission,
   status: contract.status,
@@ -80,25 +91,36 @@ const toPublicPayment = (transaction) => ({
   wallet_id: transaction.wallet_id,
   contract_id: transaction.contract_id,
   type: transaction.type,
+  amount: transaction.amount,
   commission: transaction.commission,
+  wallet_user_name: transaction.wallet_user_name ?? null,
+  wallet_user_role: transaction.wallet_user_role ?? null,
+  project_title: transaction.project_title ?? null,
 });
 
 const toPublicSubscription = (subscription) => ({
   id: subscription.id,
-  freelancer_id: subscription.freelancer_id,
+  freelancer_id: subscription.freelancer_id ?? null,
+  freelancer_name: subscription.freelancer_name ?? null,
+  client_id: subscription.client_id ?? null,
+  client_name: subscription.client_name ?? null,
   plan_type: subscription.plan_type,
   price: subscription.price,
   start_date: subscription.start_date,
   end_date: subscription.end_date,
   status: subscription.status,
   payment_status: subscription.payment_status,
+  cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
 });
 
 const toPublicDispute = (dispute) => ({
   id: dispute.id,
   reported_by: dispute.reported_by,
+  reporter_name: dispute.reporter_name ?? null,
   reported_against: dispute.reported_against,
+  reported_against_name: dispute.reported_against_name ?? null,
   project_id: dispute.project_id,
+  project_title: dispute.project_title ?? null,
   issue_type: dispute.issue_type,
   description: dispute.description,
   evidence_attachments: dispute.evidence_attachments,
@@ -110,9 +132,19 @@ const toPublicReview = (review) => ({
   id: review.id,
   contract_id: review.contract_id,
   reviewer_id: review.reviewer_id,
+  reviewer_name: review.reviewer_name ?? null,
   reviewee_id: review.reviewee_id,
+  reviewee_name: review.reviewee_name ?? null,
   rating: review.rating,
   comment: review.comment,
+});
+
+const mapPaged = (pageResult, mapper) => ({
+  items: pageResult.items.map(mapper),
+  page: pageResult.page,
+  limit: pageResult.limit,
+  total: pageResult.total,
+  total_pages: pageResult.total_pages,
 });
 
 const requireResource = (resource, message) => {
@@ -130,6 +162,9 @@ const rethrowDeleteConflict = (error, message) => {
 
   throw error;
 };
+
+export const listAdminUsers = async (filters) =>
+  mapPaged(await listAdminUserRows(filters), toPublicUser);
 
 export const getAdminUserById = async (userId) => {
   return toPublicUser(
@@ -165,6 +200,9 @@ export const deleteAdminUserById = async (userId) => {
   }
 };
 
+export const listAdminServices = async (filters) =>
+  mapPaged(await listAdminServiceRows(filters), toPublicService);
+
 export const getAdminServiceById = async (serviceId) => {
   return toPublicService(
     requireResource(await findAdminServiceById(serviceId), 'Service not found'),
@@ -189,6 +227,9 @@ export const deleteAdminServiceById = async (serviceId) => {
     );
   }
 };
+
+export const listAdminProjects = async (filters) =>
+  mapPaged(await listAdminProjectRows(filters), toPublicProject);
 
 export const getAdminProjectById = async (projectId) => {
   return toPublicProject(
@@ -215,10 +256,11 @@ export const deleteAdminProjectById = async (projectId) => {
   }
 };
 
-export const listAdminContracts = async () => {
-  const contracts = await listAdminContractRows();
-  return contracts.map(toPublicContract);
-};
+export const listAdminContracts = async (filters) =>
+  mapPaged(await listAdminContractRows(filters), toPublicContract);
+
+export const listAdminSubscriptions = async (filters) =>
+  mapPaged(await listAdminSubscriptionRows(filters), toPublicSubscription);
 
 export const getAdminSubscriptionById = async (subscriptionId) => {
   return toPublicSubscription(
@@ -239,10 +281,11 @@ export const updateAdminSubscriptionById = async (subscriptionId, payload) => {
   );
 };
 
-export const listAdminPayments = async () => {
-  const payments = await listAdminPaymentRows();
-  return payments.map(toPublicPayment);
-};
+export const listAdminPayments = async (filters) =>
+  mapPaged(await listAdminPaymentRows(filters), toPublicPayment);
+
+export const listAdminDisputes = async (filters) =>
+  mapPaged(await listAdminDisputeRows(filters), toPublicDispute);
 
 export const getAdminDisputeById = async (disputeId) => {
   return toPublicDispute(
@@ -254,6 +297,9 @@ export const updateAdminDisputeById = async (disputeId, payload) => {
   const updated = await updateAdminDisputeFields(disputeId, payload);
   return toPublicDispute(requireResource(updated, 'Dispute not found'));
 };
+
+export const listAdminReviews = async (filters) =>
+  mapPaged(await listAdminReviewRows(filters), toPublicReview);
 
 export const getAdminReviewById = async (reviewId) => {
   return toPublicReview(
