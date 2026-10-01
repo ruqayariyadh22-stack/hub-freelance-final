@@ -19,6 +19,7 @@ import { isAdminSession } from './admin/api';
 import ClientApp from './client/App';
 import FreelancerApp from './freelancer/freelance-App';
 import AboutProject from './AboutProject';
+import HomePage from './pages/Home/HomePage';
 function LoginPage() {
   const navigate = useNavigate();
   const [role, setRole] = useState("client");
@@ -216,7 +217,7 @@ function WorkspaceGate({ role, children }) {
   }, [role, token]);
 
   if (!token || authState === 'unauthenticated' || authState === 'forbidden' || authState === 'error') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (authState !== 'ready') {
@@ -257,8 +258,11 @@ function FreelancerWorkspace() {
 export default function App() {
   return (
     <Routes>
-      {/* Main Login */}
-      <Route path="/" element={<LoginPage />} />
+      {/* Homepage */}
+      <Route path="/" element={<HomePage />} />
+
+      {/* Auth login (preserved) */}
+      <Route path="/login" element={<LoginPage />} />
 
       {/* About Project - available from all pages */}
       <Route path="/about" element={<AboutProject />} />
