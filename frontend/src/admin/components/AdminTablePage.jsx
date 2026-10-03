@@ -1,6 +1,16 @@
 import { Search } from 'lucide-react';
 import { useLanguage } from './LanguageContext';
 
+const BADGE_KEYS = /(^|_)(status|role|type)$/;
+const BADGE_TONES = {
+  active: 'active', completed: 'completed', paid: 'paid', released: 'paid', resolved: 'completed',
+  delivered: 'completed', payout: 'paid', deposit: 'paid',
+  pending: 'pending', pending_approval: 'pending', in_progress: 'in-progress', under_review: 'in-review',
+  awaiting_escrow: 'pending', open: 'in-review', escrow: 'pending',
+  disabled: 'blocked', hidden: 'blocked', cancelled: 'cancelled', expired: 'expired', failed: 'rejected',
+  rejected: 'rejected', withdrawal: 'refunded',
+};
+
 export default function AdminTablePage({
   title,
   subtitle,
@@ -30,7 +40,7 @@ export default function AdminTablePage({
         </div>
       </div>
 
-      <div className="filter-bar" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="filter-bar admin-filter-bar">
         <label className="page-search">
           <Search size={16} />
           <input
@@ -77,12 +87,18 @@ export default function AdminTablePage({
                   <tr key={item.id}>
                     {columns.map((column) => (
                       <td key={column.key}>
-                        {column.render
-                          ? column.render(item)
-                          : String(item[column.key] ?? '—')}
+                        {column.render ? (
+                          column.render(item)
+                        ) : BADGE_KEYS.test(column.key) && item[column.key] ? (
+                          <span className={`status-badge ${BADGE_TONES[item[column.key]] || ''}`}>
+                            {t(String(item[column.key]))}
+                          </span>
+                        ) : (
+                          String(item[column.key] ?? '—')
+                        )}
                       </td>
                     ))}
-                    {renderActions ? <td>{renderActions(item)}</td> : null}
+                    {renderActions ? <td className="table-actions-cell">{renderActions(item)}</td> : null}
                   </tr>
                 ))
               )}
@@ -90,11 +106,11 @@ export default function AdminTablePage({
           </table>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 8 }}>
-          <span style={{ fontSize: 12, color: '#64748b' }}>
+        <div className="table-footer">
+          <span className="table-footer-total">
             {isArabic ? `الإجمالي: ${total ?? 0}` : `Total: ${total ?? 0}`}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="table-pagination">
             <button
               type="button"
               className="ghost-button"
@@ -103,7 +119,7 @@ export default function AdminTablePage({
             >
               {isArabic ? 'السابق' : 'Prev'}
             </button>
-            <span style={{ fontSize: 12, alignSelf: 'center' }}>
+            <span className="table-page-indicator">
               {page ?? 1} / {totalPages ?? 1}
             </span>
             <button

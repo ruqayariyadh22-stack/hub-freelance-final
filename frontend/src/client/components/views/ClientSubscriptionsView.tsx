@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Sparkles, Zap } from 'lucide-react';
+import { API_BASE } from '../../../shared/apiConfig.js';
 
 type SubscriptionPlan = {
   plan_type?: string;
@@ -25,7 +26,6 @@ interface ClientSubscriptionsViewProps {
   isArabic: boolean;
 }
 
-const API_BASE = 'http://localhost:5000/api';
 
 const authHeaders = () => {
   const token = localStorage.getItem('hub_token');

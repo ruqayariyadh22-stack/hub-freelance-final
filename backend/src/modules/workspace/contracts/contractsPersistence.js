@@ -78,7 +78,12 @@ export const findContractByProjectId = async (projectId, executor = query) => {
 export const listContractsByClientId = async (clientId, executor = query) => {
   const result = await runQuery(
     executor,
-    `SELECT ${CONTRACT_COLUMNS}
+    `SELECT ${CONTRACT_COLUMNS},
+       (SELECT p.title FROM projects p WHERE p.id = contracts.project_id) AS project_title,
+       (SELECT u.name FROM client_profiles cp JOIN users u ON u.id = cp.user_id
+         WHERE cp.id = contracts.client_id) AS client_name,
+       (SELECT u.name FROM freelancer_profiles fp JOIN users u ON u.id = fp.user_id
+         WHERE fp.id = contracts.freelancer_id) AS freelancer_name
      FROM contracts
      WHERE client_id = $1
      ORDER BY id DESC`,
@@ -91,7 +96,12 @@ export const listContractsByClientId = async (clientId, executor = query) => {
 export const listContractsByFreelancerId = async (freelancerId, executor = query) => {
   const result = await runQuery(
     executor,
-    `SELECT ${CONTRACT_COLUMNS}
+    `SELECT ${CONTRACT_COLUMNS},
+       (SELECT p.title FROM projects p WHERE p.id = contracts.project_id) AS project_title,
+       (SELECT u.name FROM client_profiles cp JOIN users u ON u.id = cp.user_id
+         WHERE cp.id = contracts.client_id) AS client_name,
+       (SELECT u.name FROM freelancer_profiles fp JOIN users u ON u.id = fp.user_id
+         WHERE fp.id = contracts.freelancer_id) AS freelancer_name
      FROM contracts
      WHERE freelancer_id = $1
      ORDER BY id DESC`,

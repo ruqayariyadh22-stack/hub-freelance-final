@@ -59,6 +59,7 @@ export default function Payments() {
           <option value="deposit">deposit</option>
           <option value="escrow">escrow</option>
           <option value="release">release</option>
+          <option value="payout">payout</option>
           <option value="withdrawal">withdrawal</option>
         </select>
       }

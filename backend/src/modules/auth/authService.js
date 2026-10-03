@@ -217,3 +217,33 @@ export const resetPassword = async ({ token, password }) => {
 
   return RESET_PASSWORD_RESULT;
 };
+
+export const changePassword = async (actor, { currentPassword, newPassword }) => {
+  const user = await findUserByEmail(actor.email);
+
+  if (!user || !user.password_hash) {
+    throw new AppError('User not found', 404);
+  }
+
+  const passwordMatches = await comparePassword(currentPassword, user.password_hash);
+
+  if (!passwordMatches) {
+    throw new AppError('Validation failed', 400, [
+      { field: 'current_password', message: 'Current password is incorrect' },
+    ]);
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await withTransaction(async (client) => {
+    await updateUserPasswordHashById(user.id, passwordHash, client);
+    await invalidateUnusedPasswordResetTokensByUserId(user.id, client);
+  });
+
+  await notifyUser({
+    userId: user.id,
+    type: NOTIFICATION_TYPES.PASSWORD_CHANGED,
+  });
+
+  return {};
+};

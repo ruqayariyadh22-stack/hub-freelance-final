@@ -110,7 +110,7 @@ export default function Users() {
           </button>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button danger"
             disabled={busyId === item.id}
             onClick={() => {
               if (!window.confirm(isArabic ? 'حذف المستخدم؟' : 'Delete user?')) return;

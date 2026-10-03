@@ -52,7 +52,7 @@ export default function Reviews() {
       renderActions={(item) => (
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button danger"
           disabled={busyId === item.id}
           onClick={async () => {
             if (!window.confirm(isArabic ? 'حذف التقييم؟' : 'Delete review?')) return;

@@ -124,3 +124,35 @@ export const validateResetPassword = (body = {}) => {
 
   return { token, password };
 };
+
+export const validateChangePassword = (body = {}) => {
+  const errors = [];
+  const currentPassword =
+    typeof body.current_password === 'string' ? body.current_password : '';
+  const newPassword = typeof body.new_password === 'string' ? body.new_password : '';
+
+  if (!currentPassword) {
+    errors.push({
+      field: 'current_password',
+      message: 'Current password is required',
+    });
+  }
+
+  if (!newPassword) {
+    errors.push({ field: 'new_password', message: 'New password is required' });
+  } else if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    errors.push({
+      field: 'new_password',
+      message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+    });
+  } else if (newPassword === currentPassword) {
+    errors.push({
+      field: 'new_password',
+      message: 'New password must be different from the current password',
+    });
+  }
+
+  collectErrors(errors);
+
+  return { currentPassword, newPassword };
+};

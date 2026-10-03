@@ -6,7 +6,7 @@ import { findConversationById } from './chatPersistence.js';
 import { createMessage } from './chatService.js';
 import { validateConversationIdParam, validateCreateMessage } from './chatValidation.js';
 
-const conversationRoom = (conversationId) => `conversation:${conversationId}`;
+export const conversationRoom = (conversationId) => `conversation:${conversationId}`;
 
 const readHandshakeToken = (socket) => {
   const authToken = socket.handshake.auth?.token;

@@ -3,6 +3,7 @@ import {
   NOTIFICATION_TYPES,
   notifyUser,
 } from '../../notifications/notificationMessages.js';
+import { findClientProfileById } from '../../client/clientPersistence.js';
 import { findClientProfileByUserId } from '../../projects/projectsPersistence.js';
 import { findFreelancerProfileByUserId } from '../../proposals/proposalsPersistence.js';
 import { findContractById } from '../contracts/contractsPersistence.js';
@@ -101,6 +102,15 @@ export const createScopeChange = async (contractId, actor, payload) => {
     priceAdjustment: payload.price_adjustment ?? null,
     durationAdjustment: payload.duration_adjustment ?? null,
   });
+
+  const clientProfile = await findClientProfileById(contract.client_id);
+
+  if (clientProfile?.user_id) {
+    await notifyUser({
+      userId: clientProfile.user_id,
+      type: NOTIFICATION_TYPES.SCOPE_CHANGE_CREATED,
+    });
+  }
 
   return toPublicScopeChange(created);
 };

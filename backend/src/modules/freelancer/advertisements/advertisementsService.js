@@ -38,6 +38,7 @@ const toPublicAdvertisement = (row) => ({
   freelancer_id: row.freelancer_id,
   service_id: row.service_id,
   created_at: row.created_at,
+  ...(row.freelancer_name !== undefined ? { freelancer_name: row.freelancer_name } : {}),
   service: toPublicService(row),
 });
 

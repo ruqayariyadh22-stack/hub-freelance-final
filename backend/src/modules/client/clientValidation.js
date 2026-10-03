@@ -42,18 +42,30 @@ export const validateUpdateClient = (body = {}) => {
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(body, 'logo')) {
-    if (body.logo === null) {
-      payload.logo = null;
-    } else {
-      payload.logo = asTrimmedString(body.logo) || null;
+  for (const field of ['logo', 'bio', 'location', 'website']) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) {
+      if (body[field] === null) {
+        payload[field] = null;
+      } else if (typeof body[field] !== 'string') {
+        errors.push({ field, message: `${field} must be a string` });
+      } else {
+        payload[field] = asTrimmedString(body[field]) || null;
+      }
     }
   }
 
-  if (Object.keys(payload).length === 0) {
+  if (payload.website && !/^https?:\/\//i.test(payload.website)) {
+    errors.push({ field: 'website', message: 'Website must start with http:// or https://' });
+  }
+
+  if (payload.bio && payload.bio.length > 2000) {
+    errors.push({ field: 'bio', message: 'Bio must be at most 2000 characters' });
+  }
+
+  if (Object.keys(payload).length === 0 && errors.length === 0) {
     errors.push({
       field: 'body',
-      message: 'At least one of company_name or logo is required',
+      message: 'At least one of company_name, logo, bio, location or website is required',
     });
   }
 

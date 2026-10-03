@@ -7,6 +7,7 @@ import {
   X
 } from 'lucide-react';
 import { Project } from '../../types';
+import { API_BASE } from '../../../shared/apiConfig.js';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     setAiError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/description-assistant', {
+      const response = await fetch(`${API_BASE}/ai/description-assistant`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

@@ -822,3 +822,9 @@ body{margin:0;min-width:320px}
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(20, 92, 92, 0.18);
 }
+/* Auth links (register / forgot password) */
+.auth-links{margin:18px 0 0;text-align:center;color:#64748b;font-size:13px}
+.auth-links a,.auth-forgot a{color:#2563eb;font-weight:700;text-decoration:none}
+.auth-links a:hover,.auth-forgot a:hover{text-decoration:underline}
+.auth-forgot{margin:-6px 0 12px;text-align:end;font-size:12px}
+.login-success{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:13px;padding:12px 14px;font-size:13px;line-height:1.6;margin-bottom:14px}

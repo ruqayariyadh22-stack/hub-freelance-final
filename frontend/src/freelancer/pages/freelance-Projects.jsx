@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Clock3, Filter, Send } from 'lucide-react';
+import { Clock3, Filter, MailOpen, Send } from 'lucide-react';
 import { t } from '../freelance-i18n';
-import { Card, Empty, PageHeader } from '../components/freelance-UI';
+import { Card, Empty, PageHeader, Status } from '../components/freelance-UI';
 import {
   errorMessage,
   formatMoney,
   freelancerGet,
+  freelancerPatch,
   freelancerPost,
 } from '../api';
 
@@ -24,6 +25,35 @@ export default function Projects({ lang, notify }) {
   const [proposalMessage, setProposalMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [invitations, setInvitations] = useState([]);
+
+  const loadInvitations = async () => {
+    try {
+      const data = await freelancerGet('/invitations');
+      setInvitations(Array.isArray(data) ? data : []);
+    } catch {
+      setInvitations([]);
+    }
+  };
+
+  const declineInvitation = async (invitation) => {
+    try {
+      const updated = await freelancerPatch(`/invitations/${invitation.id}/decline`, {});
+      setInvitations((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+      notify(t(lang, 'تم رفض الدعوة', 'Invitation declined'));
+    } catch (err) {
+      notify(errorMessage(err, t(lang, 'تعذر رفض الدعوة', 'Failed to decline invitation')));
+    }
+  };
+
+  const respondToInvitation = (invitation) => {
+    const project = projects.find((p) => String(p.id) === String(invitation.project_id));
+    if (project) {
+      openProposal(project);
+    } else {
+      notify(t(lang, 'هذا المشروع لم يعد مفتوحاً', 'This project is no longer open'));
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -41,6 +71,7 @@ export default function Projects({ lang, notify }) {
 
   useEffect(() => {
     load();
+    loadInvitations();
   }, []);
 
   const categories = useMemo(() => {
@@ -100,6 +131,7 @@ export default function Projects({ lang, notify }) {
       });
       notify(t(lang, 'تم إرسال العرض بنجاح', 'Proposal submitted successfully'));
       setSelectedProject(null);
+      loadInvitations();
     } catch (err) {
       setSubmitError(errorMessage(err, t(lang, 'فشل إرسال العرض', 'Failed to submit proposal')));
     } finally {
@@ -116,6 +148,44 @@ export default function Projects({ lang, notify }) {
         subAr="ابحث عن المشاريع المناسبة وأرسل عروضك للعملاء."
         subEn="Find suitable projects and submit proposals to clients."
       />
+      {invitations.some((inv) => inv.status === 'pending') && (
+        <Card>
+          <div className="card-head">
+            <div>
+              <h3>
+                <MailOpen size={16} /> {t(lang, 'دعوات من العملاء', 'Client invitations')}
+              </h3>
+              <p>{t(lang, 'عملاء دعوك للتقديم على مشاريعهم', 'Clients invited you to send a proposal')}</p>
+            </div>
+          </div>
+          {invitations
+            .filter((inv) => inv.status === 'pending')
+            .map((inv) => (
+              <div className="toggle-row" key={inv.id}>
+                <div>
+                  <b>{inv.project_title || `#${inv.project_id}`}</b>
+                  <small>
+                    {inv.client_name ? `${inv.client_name} · ` : ''}
+                    {formatMoney(inv.budget_min)} – {formatMoney(inv.budget_max)}
+                  </small>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {inv.project_status !== 'open' ? (
+                    <Status lang={lang} type={inv.project_status} />
+                  ) : (
+                    <button className="primary" type="button" onClick={() => respondToInvitation(inv)}>
+                      <Send size={13} />
+                      {t(lang, 'تقديم عرض', 'Send proposal')}
+                    </button>
+                  )}
+                  <button className="ghost" type="button" onClick={() => declineInvitation(inv)}>
+                    {t(lang, 'رفض', 'Decline')}
+                  </button>
+                </div>
+              </div>
+            ))}
+        </Card>
+      )}
       <div className="toolbar">
         <div className="input-search">
           <span>⌕</span>

@@ -68,9 +68,13 @@ export const listPublicAdvertisements = async (executor = query) => {
        s.price,
        s.delivery_time,
        s.status,
-       s.is_featured
+       s.is_featured,
+       u.name AS freelancer_name
      FROM advertisements a
      JOIN services s ON s.id = a.service_id
+     LEFT JOIN freelancer_profiles fp ON fp.id = a.freelancer_id
+     LEFT JOIN users u ON u.id = fp.user_id
+     WHERE s.status = 'active'
      ORDER BY a.created_at DESC, a.id DESC`,
   );
 

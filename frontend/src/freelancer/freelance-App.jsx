@@ -81,22 +81,40 @@ export default function App() {
 
     const lower = q.toLowerCase();
     const wantsBudget =
-      lower.includes('budget') ||
-      lower.includes('ميزاني') ||
-      q.includes('حلل الميزانية');
-    const endpoint = wantsBudget
-      ? '/ai/budget-analysis'
-      : '/ai/project-analysis';
+      lower.includes('budget') || q.includes('ميزاني');
+    const wantsProject =
+      !wantsBudget &&
+      (q.includes('حلل مشروع') || q.includes('تحليل المشروع') || lower.includes('analyze my project') || lower.includes('project analysis'));
+    const history = messages
+      .slice(1)
+      .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text }))
+      .filter((m) => m.text);
 
     setSending(true);
     try {
-      const data = await freelancerPost(endpoint, {});
-      const text =
-        extractAiText(data) ||
-        t(lang, 'تم إكمال التحليل.', 'Analysis completed.');
-      setMessages((m) => [...m, { role: 'ai', text }]);
+      let text;
+      if (wantsBudget || wantsProject) {
+        const data = await freelancerPost(wantsBudget ? '/ai/budget-analysis' : '/ai/project-analysis', {});
+        text = extractAiText(data);
+      } else {
+        const data = await freelancerPost('/ai/assistant', { message: q, history });
+        text = data?.reply;
+      }
+      setMessages((m) => [
+        ...m,
+        { role: 'ai', text: text || t(lang, 'تم إكمال التحليل.', 'Analysis completed.') },
+      ]);
     } catch (err) {
-      const msg = errorMessage(err, t(lang, 'فشل طلب الذكاء الاصطناعي', 'AI request failed'));
+      const msg =
+        err?.status === 503
+          ? t(
+              lang,
+              'المساعد الذكي غير متاح حالياً: لم يتم إعداد مفتاح Gemini على الخادم.',
+              'The AI assistant is unavailable: the Gemini API key is not configured on the server.',
+            )
+          : err?.status === 429
+            ? t(lang, 'وصلت للحد اليومي لطلبات الذكاء الاصطناعي. حاول غداً.', 'Daily AI limit reached. Try again tomorrow.')
+            : errorMessage(err, t(lang, 'فشل طلب الذكاء الاصطناعي', 'AI request failed'));
       setAiError(msg);
       setMessages((m) => [...m, { role: 'ai', text: msg }]);
     } finally {

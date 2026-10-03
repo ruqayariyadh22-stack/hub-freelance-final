@@ -1,5 +1,6 @@
 import { AppError } from '../../utils/appError.js';
 import { requireEntityId } from '../../utils/entityId.js';
+import { NOTIFICATION_PREFERENCE_KEYS } from './notificationPreferences.js';
 
 const asTrimmedString = (value) => {
   if (typeof value !== 'string') {
@@ -88,6 +89,38 @@ export const validateUpdateMe = (body = {}) => {
     errors.push({
       field: 'body',
       message: 'At least one of name, phone, or profile_image is required',
+    });
+  }
+
+  collectErrors(errors);
+
+  return payload;
+};
+
+export const validateUpdatePreferences = (body = {}) => {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw new AppError('Validation failed', 400, [
+      { field: 'body', message: 'Request body must be an object' },
+    ]);
+  }
+
+  const errors = [];
+  const payload = {};
+
+  for (const [key, value] of Object.entries(body)) {
+    if (!NOTIFICATION_PREFERENCE_KEYS.includes(key)) {
+      errors.push({ field: key, message: `${key} is not a notification preference` });
+    } else if (typeof value !== 'boolean') {
+      errors.push({ field: key, message: `${key} must be a boolean` });
+    } else {
+      payload[key] = value;
+    }
+  }
+
+  if (Object.keys(payload).length === 0 && errors.length === 0) {
+    errors.push({
+      field: 'body',
+      message: 'At least one notification preference is required',
     });
   }
 

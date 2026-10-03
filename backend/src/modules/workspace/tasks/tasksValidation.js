@@ -13,6 +13,21 @@ const IDENTITY_FIELDS = [
   'requested_by',
 ];
 
+const TASK_STATUSES = ['todo', 'in_progress', 'completed'];
+const TASK_STATUS_ALIASES = { done: 'completed', complete: 'completed', 'in-progress': 'in_progress' };
+
+const normalizeTaskStatus = (value) => {
+  const status = value.trim().toLowerCase();
+  return TASK_STATUS_ALIASES[status] || status;
+};
+
+const pushInvalidStatus = (errors) => {
+  errors.push({
+    field: 'status',
+    message: `Status must be one of: ${TASK_STATUSES.join(', ')}`,
+  });
+};
+
 const asTrimmedString = (value) => {
   if (typeof value !== 'string') {
     return '';
@@ -94,8 +109,10 @@ export const validateCreateTask = (body = {}) => {
   if (Object.prototype.hasOwnProperty.call(body, 'status')) {
     if (typeof body.status !== 'string' || !body.status.trim()) {
       errors.push({ field: 'status', message: 'Status must be a string' });
+    } else if (!TASK_STATUSES.includes(normalizeTaskStatus(body.status))) {
+      pushInvalidStatus(errors);
     } else {
-      payload.status = body.status.trim();
+      payload.status = normalizeTaskStatus(body.status);
     }
   }
 
@@ -147,11 +164,13 @@ export const validateUpdateTaskStatus = (body = {}) => {
     errors.push({ field: 'status', message: 'Status is required' });
   } else if (typeof body.status !== 'string' || !body.status.trim()) {
     errors.push({ field: 'status', message: 'Status must be a string' });
+  } else if (!TASK_STATUSES.includes(normalizeTaskStatus(body.status))) {
+    pushInvalidStatus(errors);
   }
 
   collectErrors(errors);
 
   return {
-    status: asTrimmedString(body.status),
+    status: normalizeTaskStatus(asTrimmedString(body.status)),
   };
 };

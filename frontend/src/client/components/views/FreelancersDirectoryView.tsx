@@ -1,4 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { clientRequest } from '../../api';
+
+type FeaturedAd = {
+  id: number;
+  freelancer_id: number;
+  freelancer_name?: string | null;
+  service: {
+    id: number;
+    title: string | null;
+    description: string | null;
+    category: string | null;
+    price: number | string | null;
+    delivery_time: number | string | null;
+  };
+};
 import {
   Users,
   Search,
@@ -26,6 +41,29 @@ export const FreelancersDirectoryView: React.FC<FreelancersDirectoryViewProps> =
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [featured, setFeatured] = useState<FeaturedAd[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    clientRequest<FeaturedAd[]>('/advertisements')
+      .then((rows) => {
+        if (cancelled || !Array.isArray(rows)) return;
+        const seen = new Set<number>();
+        setFeatured(
+          rows.filter((ad) => {
+            if (!ad.service || seen.has(ad.service.id)) return false;
+            seen.add(ad.service.id);
+            return true;
+          }).slice(0, 6)
+        );
+      })
+      .catch(() => {
+        // Featured services are optional.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredFreelancers = freelancers.filter((f) => {
     const matchesSearch =
@@ -74,6 +112,44 @@ export const FreelancersDirectoryView: React.FC<FreelancersDirectoryViewProps> =
           ))}
         </div>
       </div>
+
+      {featured.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-white p-4 rounded-2xl border border-amber-200 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-extrabold text-amber-900">
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            {isArabic ? 'خدمات مميزة من المستقلين' : 'Featured freelancer services'}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {featured.map((ad) => {
+              const owner = freelancers.find((f) => String(f.id) === String(ad.freelancer_id));
+              return (
+                <div key={ad.id} className="bg-white rounded-xl border border-slate-200 p-3 text-xs flex flex-col gap-1.5">
+                  <span className="font-bold text-slate-900 line-clamp-1">{ad.service.title}</span>
+                  <span className="text-slate-500 line-clamp-2">{ad.service.description}</span>
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <span className="font-extrabold text-emerald-700">
+                      ${Number(ad.service.price || 0).toLocaleString()}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {ad.freelancer_name || owner?.name || ''}
+                      {ad.service.delivery_time ? ` · ${ad.service.delivery_time} ${isArabic ? 'يوم' : 'd'}` : ''}
+                    </span>
+                  </div>
+                  {owner && (
+                    <button
+                      type="button"
+                      onClick={() => onInviteFreelancer(owner)}
+                      className="text-[11px] font-bold text-blue-600 bg-blue-50 rounded-lg py-1 border border-blue-100 hover:bg-blue-100"
+                    >
+                      {isArabic ? 'دعوة لمشروع' : 'Invite to project'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search box */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">

@@ -3,6 +3,13 @@ import { Bell, Check, MoreHorizontal } from 'lucide-react';
 import { t } from '../freelance-i18n';
 import { Card, Empty, PageHeader } from '../components/freelance-UI';
 import { errorMessage, freelancerGet, freelancerPatch } from '../api';
+import {
+  NOTIFICATIONS_CHANGED,
+  announceNotificationsChanged,
+  formatNotificationTime,
+  notificationMessage,
+  notificationTitle,
+} from '../notificationText';
 
 export default function Notifications({ lang, notify }) {
   const [items, setItems] = useState([]);
@@ -28,6 +35,12 @@ export default function Notifications({ lang, notify }) {
 
   useEffect(() => {
     load();
+    const refresh = () =>
+      freelancerGet('/notifications')
+        .then((data) => setItems(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED, refresh);
   }, []);
 
   const markAsRead = async (id) => {
@@ -37,6 +50,7 @@ export default function Notifications({ lang, notify }) {
       const updated = await freelancerPatch(`/notifications/${id}/read`, {});
       setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setOpenMenu(null);
+      announceNotificationsChanged();
       if (notify) notify(t(lang, 'تم تعليم الإشعار كمقروء', 'Notification marked as read'));
     } catch (err) {
       if (notify) {
@@ -49,6 +63,21 @@ export default function Notifications({ lang, notify }) {
 
   const unread = items.filter((n) => !n.is_read).length;
 
+  const markAllAsRead = async () => {
+    if (busyId || unread === 0) return;
+    setBusyId('all');
+    try {
+      await freelancerPatch('/notifications/read-all', {});
+      setItems((prev) => prev.map((item) => ({ ...item, is_read: true })));
+      announceNotificationsChanged();
+      if (notify) notify(t(lang, 'تم تعليم الكل كمقروء', 'All notifications marked as read'));
+    } catch (err) {
+      if (notify) notify(errorMessage(err, t(lang, 'فشل التحديث', 'Update failed')));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -58,9 +87,16 @@ export default function Notifications({ lang, notify }) {
         subAr="إشعارات النظام المرتبطة بحسابك."
         subEn="System notifications for your account."
         action={
-          <span className="badge-soft blue">
-            <Bell size={12} /> {unread} {t(lang, 'غير مقروء', 'unread')}
-          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="badge-soft blue">
+              <Bell size={12} /> {unread} {t(lang, 'غير مقروء', 'unread')}
+            </span>
+            {unread > 0 && (
+              <button className="ghost" type="button" disabled={busyId !== null} onClick={markAllAsRead}>
+                {t(lang, 'تعليم الكل كمقروء', 'Mark all as read')}
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -92,10 +128,10 @@ export default function Notifications({ lang, notify }) {
               style={{ position: 'relative' }}
             >
               <div>
-                <b>{item.type}</b>
-                <p>{item.message}</p>
+                <b>{notificationTitle(lang, item)}</b>
+                <p>{notificationMessage(lang, item)}</p>
                 <small>
-                  {item.created_at ? String(item.created_at).slice(0, 19) : ''}
+                  {formatNotificationTime(item.created_at)}
                   {item.is_read ? '' : ` · ${t(lang, 'غير مقروء', 'unread')}`}
                 </small>
               </div>

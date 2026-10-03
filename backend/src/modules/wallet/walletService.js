@@ -45,7 +45,11 @@ const TRANSACTION_TYPES = {
   DEPOSIT: 'deposit',
   ESCROW: 'escrow',
   RELEASE: 'release',
+  PAYOUT: 'payout',
+  WITHDRAWAL: 'withdrawal',
 };
+
+export const MIN_WITHDRAWAL_AMOUNT = 1;
 
 const toPublicWallet = (wallet) => ({
   id: wallet.id,
@@ -61,6 +65,7 @@ const toPublicTransaction = (transaction) => ({
   type: transaction.type,
   commission: transaction.commission,
   amount: transaction.amount,
+  created_at: transaction.created_at,
 });
 
 const requireWallet = (wallet) => {
@@ -319,9 +324,19 @@ export const releasePaymentByContractId = async (contractId, actor) => {
       { balanceDelta: 0, escrowDelta: -contractValue },
       client,
     );
-    await updateWalletBalancesById(
+    const updatedFreelancerWallet = await updateWalletBalancesById(
       freelancerWallet.id,
       { balanceDelta: payout, escrowDelta: 0 },
+      client,
+    );
+    await insertTransaction(
+      {
+        walletId: updatedFreelancerWallet.id,
+        contractId: contract.id,
+        type: TRANSACTION_TYPES.PAYOUT,
+        commission,
+        amount: payout,
+      },
       client,
     );
     await updateContractPaymentStatusById(contract.id, 'released', client);
@@ -343,6 +358,53 @@ export const releasePaymentByContractId = async (contractId, actor) => {
   await notifyUser({
     userId: freelancerUserId,
     type: NOTIFICATION_TYPES.PAYMENT_RELEASED,
+  });
+
+  return result;
+};
+
+export const withdrawFromWallet = async (actor, amount) => {
+  const withdrawalAmount = requirePositiveMoney(amount, 'amount');
+
+  if (withdrawalAmount < MIN_WITHDRAWAL_AMOUNT) {
+    throw new AppError('Validation failed', 400, [
+      {
+        field: 'amount',
+        message: `Minimum withdrawal is ${MIN_WITHDRAWAL_AMOUNT}`,
+      },
+    ]);
+  }
+
+  const result = await withTransaction(async (client) => {
+    const wallet = await requireExistingWallet(actor.id, client);
+    const available = parseStoredMoney(wallet.balance, 'balance');
+
+    if (available < withdrawalAmount) {
+      throw new AppError('Insufficient wallet balance', 409);
+    }
+
+    const updated = await updateWalletBalancesById(
+      wallet.id,
+      { balanceDelta: -withdrawalAmount, escrowDelta: 0 },
+      client,
+    );
+    const transaction = await insertTransaction(
+      {
+        walletId: updated.id,
+        contractId: null,
+        type: TRANSACTION_TYPES.WITHDRAWAL,
+        commission: null,
+        amount: withdrawalAmount,
+      },
+      client,
+    );
+
+    return financialResult(updated, transaction);
+  });
+
+  await notifyUser({
+    userId: actor.id,
+    type: NOTIFICATION_TYPES.WITHDRAWAL_COMPLETED,
   });
 
   return result;

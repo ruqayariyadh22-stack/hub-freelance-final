@@ -12,6 +12,7 @@ const startServer = async () => {
     },
   });
 
+  app.set('io', io);
   attachChatSocket(io);
 
   httpServer.listen(env.port, () => {

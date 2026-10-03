@@ -66,16 +66,18 @@ interface SidebarProps {
   pendingProposalsCount?: number;
   isArabic: boolean;
   clientProfile: ClientProfile;
+  walletBalance?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   openNewProjectModal,
-  unreadScopeChangesCount = 1,
-  pendingProposalsCount = 3,
+  unreadScopeChangesCount = 0,
+  pendingProposalsCount = 0,
   isArabic,
-  clientProfile
+  clientProfile,
+  walletBalance = 0
 }) => {
 
 const navigate = useNavigate();
@@ -145,7 +147,7 @@ const navigate = useNavigate();
   ];
 
   return (
-    <aside className="w-64 md:w-72 bg-[#122338] text-slate-300 flex flex-col shrink-0 min-h-screen border-e border-slate-800 transition-all duration-300">
+    <aside className="hub-sidebar-scroll w-64 md:w-72 h-full bg-[#122338] text-slate-300 flex flex-col shrink-0 overflow-y-auto overscroll-contain border-e border-slate-800 transition-all duration-300">
       {/* Brand Header */}
       <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -165,7 +167,7 @@ const navigate = useNavigate();
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-1">
         <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1.5">
           {isArabic ? 'لوحة التحكم والمشاريع' : 'Workspace & Projects'}
         </div>
@@ -219,7 +221,7 @@ const navigate = useNavigate();
         <div className="flex items-center gap-3">
           <div className="relative">
             <img
-              src="https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80"
+              src={clientProfile.logo}
               alt="Company Logo"
               referrerPolicy="no-referrer"
               className="w-10 h-10 rounded-xl object-cover border border-slate-600"
@@ -227,14 +229,16 @@ const navigate = useNavigate();
             <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#122338]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-white truncate">{clientProfile.companyName?.trim() ? clientProfile.companyName : '—'}</p>
+            <p className="text-xs font-bold text-white truncate">{clientProfile.companyName?.trim() ? clientProfile.companyName : clientProfile.name || '—'}</p>
             <p className="text-[11px] text-slate-400 truncate">{clientProfile.name} (Client)</p>
           </div>
         </div>
         <div className="mt-2.5 pt-2.5 border-t border-slate-700/40 flex items-center justify-between text-[11px] text-slate-400">
           <span className="flex items-center gap-1 text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            {isArabic ? 'رصيد المحفظة: $4,250' : 'Balance: $4,250'}
+            {isArabic
+              ? `رصيد المحفظة: $${walletBalance.toLocaleString()}`
+              : `Balance: $${walletBalance.toLocaleString()}`}
           </span>
           <button
             onClick={() => setActiveTab('wallet')}

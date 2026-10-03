@@ -105,6 +105,7 @@ export interface ChatMessage {
     name: string;
     size: string;
     type: string;
+    url?: string;
   };
 }
 
@@ -177,7 +178,7 @@ export interface DisputeRecord {
   projectTitle: string;
   freelancerName: string;
   freelancerAvatar: string;
-  issueType: 'delay' | 'quality' | 'scope_breach' | 'communication' | 'other';
+  issueType: 'delay' | 'quality' | 'scope_breach' | 'communication' | 'payment' | 'other';
   description: string;
   evidenceAttachments: string[];
   status: 'under_review' | 'freelancer_response' | 'resolved' | 'closed';

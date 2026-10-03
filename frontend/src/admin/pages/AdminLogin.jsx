@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Globe2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import HubLogo from '../../shared/HubLogo';
 import { LanguageProvider, useLanguage } from '../components/LanguageContext';
-import { clearAdminSession, isAdminSession } from '../api';
+import { clearAdminSession, isAdminSession, saveAdminSession } from '../api';
+import { API_BASE } from '../../shared/apiConfig.js';
 
 function AdminLoginContent() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ function AdminLoginContent() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -65,10 +66,7 @@ function AdminLoginContent() {
         return;
       }
 
-      localStorage.setItem('hub_token', payload.data.token);
-      localStorage.setItem('hub_user', JSON.stringify(payload.data.user));
-      localStorage.setItem('hub_role', 'admin');
-      localStorage.removeItem('hub_admin_authenticated');
+      saveAdminSession(payload.data.token, payload.data.user);
       navigate('/admin/dashboard', { replace: true });
     } catch {
       setError(isArabic ? 'تعذر الاتصال بالخادم' : 'Unable to reach the server');

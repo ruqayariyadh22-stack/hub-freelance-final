@@ -59,3 +59,58 @@ export const insertFreelancerSkill = async (freelancerId, skillId) => {
 
   return result.rows[0];
 };
+
+export const listSkillCatalog = async (search) => {
+  const params = [];
+  let where = '';
+
+  if (search) {
+    params.push(`%${search}%`);
+    where = `WHERE name ILIKE $1`;
+  }
+
+  const result = await query(
+    `SELECT ${SKILL_COLUMNS}
+     FROM skills
+     ${where}
+     ORDER BY name ASC
+     LIMIT 50`,
+    params,
+  );
+
+  return result.rows;
+};
+
+export const findSkillByName = async (name) => {
+  const result = await query(
+    `SELECT ${SKILL_COLUMNS}
+     FROM skills
+     WHERE LOWER(name) = LOWER($1)
+     ORDER BY id ASC
+     LIMIT 1`,
+    [name],
+  );
+
+  return result.rows[0] || null;
+};
+
+export const insertSkill = async (name) => {
+  const result = await query(
+    `INSERT INTO skills (name)
+     VALUES ($1)
+     RETURNING ${SKILL_COLUMNS}`,
+    [name],
+  );
+
+  return result.rows[0];
+};
+
+export const deleteFreelancerSkill = async (freelancerId, skillId) => {
+  const result = await query(
+    `DELETE FROM freelancer_skills
+     WHERE freelancer_id = $1 AND skill_id = $2`,
+    [freelancerId, skillId],
+  );
+
+  return result.rowCount;
+};

@@ -1,4 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { clientRequest, errorText, uploadFile } from '../../api';
+
+type ContractAttachment = {
+  id: number;
+  file_name: string;
+  file_url: string;
+  size_bytes: number | null;
+  note: string | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+};
+
+const formatBytes = (bytes: number | null) => {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 import {
   Briefcase,
   CheckCircle2,
@@ -30,7 +48,7 @@ interface WorkspaceViewProps {
   onRejectScopeChange: (contractId: string, scopeChangeId: string) => void;
   onToggleTaskStatus: (contractId: string, taskId: string) => void;
   onAddTask: (contractId: string, task: Omit<TaskItem, 'id' | 'contractId'>) => void;
-  onSendMessage: (conversationId: string, messageText: string) => void;
+  onSendMessage: (conversationId: string, messageText: string, attachments?: string[]) => void;
   onReleaseEscrow: (contractId: string) => void;
   onOpenDispute: (contractId: string) => void;
   onOpenReviewModal: (contract: Contract) => void;
@@ -59,6 +77,36 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [showAddTaskInput, setShowAddTaskInput] = useState(false);
+  const [attachments, setAttachments] = useState<ContractAttachment[]>([]);
+  const [attachmentsError, setAttachmentsError] = useState('');
+  const [uploadingDelivery, setUploadingDelivery] = useState(false);
+  const [uploadingChatFile, setUploadingChatFile] = useState(false);
+  const chatFileRef = useRef<HTMLInputElement | null>(null);
+  const deliveryFileRef = useRef<HTMLInputElement | null>(null);
+  const attachmentsContractId =
+    currentContract && /^\d+$/.test(currentContract.id) ? currentContract.id : '';
+
+  useEffect(() => {
+    if (!attachmentsContractId || activeSubTab !== 'deliverables') {
+      return;
+    }
+    let cancelled = false;
+    clientRequest<ContractAttachment[]>(`/contracts/${attachmentsContractId}/attachments`)
+      .then((rows) => {
+        if (!cancelled) {
+          setAttachments(Array.isArray(rows) ? rows : []);
+          setAttachmentsError('');
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAttachmentsError(errorText(err, 'Unable to load files.'));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachmentsContractId, activeSubTab]);
 
   if (!currentContract) {
     return (
@@ -97,6 +145,42 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
     setNewTaskTitle('');
     setNewTaskDueDate('');
     setShowAddTaskInput(false);
+  };
+
+  const handleDeliveryFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !attachmentsContractId) return;
+    setUploadingDelivery(true);
+    setAttachmentsError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const created = await clientRequest<ContractAttachment>(
+        `/contracts/${attachmentsContractId}/attachments`,
+        { method: 'POST', form }
+      );
+      setAttachments((prev) => [created, ...prev]);
+    } catch (err) {
+      setAttachmentsError(errorText(err, isArabic ? 'تعذر رفع الملف' : 'Unable to upload file'));
+    } finally {
+      setUploadingDelivery(false);
+    }
+  };
+
+  const handleChatFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !currentContract.conversationId) return;
+    setUploadingChatFile(true);
+    try {
+      const uploaded = await uploadFile(file);
+      onSendMessage(currentContract.conversationId, uploaded.file_name, [uploaded.file_url]);
+    } catch (err) {
+      alert(errorText(err, isArabic ? 'تعذر رفع الملف' : 'Unable to upload file'));
+    } finally {
+      setUploadingChatFile(false);
+    }
   };
 
   const pendingScopeChanges = currentContract.scopeChanges.filter((sc) => sc.status === 'pending');
@@ -546,13 +630,61 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 {isArabic ? 'ملاحظات المستقل عند التسليم:' : 'Freelancer Delivery Notes:'}
               </span>
               <span className="text-[11px] text-slate-400">
-                {deliverableFiles?.length || 0} {isArabic ? 'ملفات مرفقة' : 'files attached'}
+                {(isRealBackendContract ? attachments.length : deliverableFiles?.length) || 0}{' '}
+                {isArabic ? 'ملفات مرفقة' : 'files attached'}
               </span>
             </div>
 
-            <p className="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 leading-relaxed">
-              {deliverableNotes || (isArabic ? 'لم يتم إرفاق ملاحظات تسليم بعد.' : 'No notes yet.')}
-            </p>
+            {!isRealBackendContract && (
+              <p className="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 leading-relaxed">
+                {deliverableNotes || (isArabic ? 'لم يتم إرفاق ملاحظات تسليم بعد.' : 'No notes yet.')}
+              </p>
+            )}
+
+            {isRealBackendContract && (
+              <div className="space-y-2">
+                {attachmentsError && <p className="text-xs font-bold text-red-600">{attachmentsError}</p>}
+                {attachments.length === 0 && !attachmentsError && (
+                  <p className="text-xs text-slate-500 bg-white p-3.5 rounded-xl border border-slate-200">
+                    {isArabic ? 'لم يرفع المستقل أي ملفات تسليم بعد.' : 'The freelancer has not uploaded delivery files yet.'}
+                  </p>
+                )}
+                {attachments.map((file) => (
+                  <a
+                    key={file.id}
+                    href={file.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-blue-300 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-slate-800 truncate block">{file.file_name}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {[file.uploaded_by_name, formatBytes(file.size_bytes), String(file.created_at || '').slice(0, 10)]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                        {file.note && <span className="text-[11px] text-slate-600 block">{file.note}</span>}
+                      </div>
+                    </div>
+                    <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  </a>
+                ))}
+                <input ref={deliveryFileRef} type="file" className="hidden" onChange={handleDeliveryFileSelected} />
+                <button
+                  type="button"
+                  disabled={uploadingDelivery}
+                  onClick={() => deliveryFileRef.current?.click()}
+                  className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 disabled:opacity-50"
+                >
+                  {uploadingDelivery
+                    ? isArabic ? 'جاري الرفع...' : 'Uploading...'
+                    : isArabic ? 'إرفاق ملف للمستقل' : 'Share a file with the freelancer'}
+                </button>
+              </div>
+            )}
 
             {/* Files List */}
             {deliverableFiles && deliverableFiles.length > 0 && (
@@ -684,8 +816,21 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                           }`}
                         >
                           <Paperclip className="w-3.5 h-3.5 shrink-0" />
-                          <span className="font-semibold truncate">{msg.attachment.name}</span>
-                          <span className="text-[10px] opacity-80">({msg.attachment.size})</span>
+                          {msg.attachment.url ? (
+                            <a
+                              href={msg.attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold truncate underline"
+                            >
+                              {msg.attachment.name}
+                            </a>
+                          ) : (
+                            <span className="font-semibold truncate">{msg.attachment.name}</span>
+                          )}
+                          {msg.attachment.size && (
+                            <span className="text-[10px] opacity-80">({msg.attachment.size})</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -704,20 +849,15 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
 
           {/* Chat Input form */}
           <form onSubmit={handleSendChat} className="p-3 border-t border-slate-200 flex items-center gap-2">
+            <input ref={chatFileRef} type="file" className="hidden" onChange={handleChatFileSelected} />
             <button
               type="button"
-              onClick={() => {
-                if (currentContract.conversationId) {
-                  return;
-                }
-                if (!/^\d+$/.test(currentContract.id)) {
-                  onSendMessage(currentContract.id, isArabic ? 'مرفق ملف توضيحي جديد' : 'Attached supplementary doc');
-                }
-              }}
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors"
+              disabled={!currentContract.conversationId || uploadingChatFile}
+              onClick={() => chatFileRef.current?.click()}
+              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-40"
               title={isArabic ? 'إرفاق ملف' : 'Attach file'}
             >
-              <Paperclip className="w-4 h-4" />
+              <Paperclip className={`w-4 h-4 ${uploadingChatFile ? 'animate-pulse' : ''}`} />
             </button>
             <input
               type="text"

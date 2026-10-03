@@ -92,3 +92,21 @@ export const insertUsageLog = async (
 
   return result.rows[0];
 };
+
+export const countUsageLogsForUserActionOnCurrentDate = async (
+  userId,
+  action,
+  executor = query,
+) => {
+  const result = await runQuery(
+    executor,
+    `SELECT COUNT(*)::int AS usage_count
+     FROM ai_usage_logs
+     WHERE user_id = $1
+       AND action = $2
+       AND created_at::date = CURRENT_DATE`,
+    [userId, action],
+  );
+
+  return result.rows[0].usage_count;
+};

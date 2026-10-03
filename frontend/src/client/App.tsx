@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -18,7 +18,6 @@ import { TopUpModal } from './components/modals/TopUpModal';
 import { ReviewModal } from './components/modals/ReviewModal';
 import { AiAssistantModal } from './components/modals/AiAssistantModal';
 
-import { initialClientProfile } from './data/mockData';
 import {
   ClientProfile,
   Project,
@@ -34,6 +33,10 @@ import {
   ChatMessage,
   AiMatchingBreakdown
 } from './types';
+import { API_BASE, API_ORIGIN } from '../shared/apiConfig.js';
+import { initialsAvatar } from '../shared/avatar.js';
+import { clientRequest, errorText } from './api';
+import { InviteFreelancerModal } from './components/modals/InviteFreelancerModal';
 
 const readHubUser = () => {
   try {
@@ -44,8 +47,36 @@ const readHubUser = () => {
   }
 };
 
+const buildInitialClientProfile = (): ClientProfile => {
+  const hubUser = readHubUser();
+  const name = hubUser?.name ? String(hubUser.name) : '';
+
+  return {
+    id: hubUser?.profile?.id != null ? String(hubUser.profile.id) : '',
+    userId: hubUser?.id != null ? String(hubUser.id) : '',
+    name,
+    companyName: '',
+    email: hubUser?.email ? String(hubUser.email) : '',
+    phone: hubUser?.phone ? String(hubUser.phone) : '',
+    logo: hubUser?.profile_image || initialsAvatar(name),
+    bio: '',
+    location: '',
+    website: '',
+    joinedDate: hubUser?.created_at ? String(hubUser.created_at).slice(0, 10) : '',
+    accountStatus: hubUser?.account_status === 'disabled' ? 'disabled' : 'active'
+  };
+};
+
 const mapBackendClientProfile = (
-  data: { id: number; user_id: number; company_name: string | null; logo: string | null },
+  data: {
+    id: number;
+    user_id: number;
+    company_name: string | null;
+    logo: string | null;
+    bio?: string | null;
+    location?: string | null;
+    website?: string | null;
+  },
   hubUser: {
     id?: number;
     name?: string;
@@ -63,10 +94,10 @@ const mapBackendClientProfile = (
   companyName: data.company_name == null ? '' : String(data.company_name),
   email: hubUser?.email ? String(hubUser.email) : fallback.email,
   phone: hubUser?.phone == null ? '' : String(hubUser.phone),
-  logo: data.logo || hubUser?.profile_image || fallback.logo,
-  bio: '',
-  location: '',
-  website: '',
+  logo: data.logo || hubUser?.profile_image || initialsAvatar(hubUser?.name || fallback.name),
+  bio: data.bio == null ? '' : String(data.bio),
+  location: data.location == null ? '' : String(data.location),
+  website: data.website == null ? '' : String(data.website),
   joinedDate: hubUser?.created_at
     ? String(hubUser.created_at).slice(0, 10)
     : fallback.joinedDate,
@@ -164,12 +195,12 @@ const mapBackendContract = (data: Record<string, unknown>): Contract => ({
   id: String(data.id),
   orderNumber: '',
   projectId: String(data.project_id),
-  projectTitle: '',
+  projectTitle: data.project_title == null ? '' : String(data.project_title),
   clientId: String(data.client_id),
-  clientName: '',
+  clientName: data.client_name == null ? '' : String(data.client_name),
   freelancerId: String(data.freelancer_id),
-  freelancerName: '',
-  freelancerAvatar: '',
+  freelancerName: data.freelancer_name == null ? '' : String(data.freelancer_name),
+  freelancerAvatar: initialsAvatar(data.freelancer_name == null ? '' : String(data.freelancer_name)),
   freelancerSpecialty: '',
   contractValue: toProjectNumber(data.contract_value),
   escrowHeld: 0,
@@ -261,7 +292,7 @@ const loadBackendReviewsForContracts = async ({
 
   for (const [freelancerId, relatedContracts] of contractsByFreelancer) {
     const reviewsData = await readSuccessData(
-      `http://localhost:5000/api/freelancers/${freelancerId}/reviews`,
+      `${API_BASE}/freelancers/${freelancerId}/reviews`,
       token
     );
 
@@ -367,7 +398,7 @@ const enrichMappedFreelancer = async ({
 
   if (userId != null && String(userId).trim() !== '') {
     const userData = asRecord(
-      await readSuccessData(`http://localhost:5000/api/users/${userId}`, token)
+      await readSuccessData(`${API_BASE}/users/${userId}`, token)
     );
     if (userData?.name != null && String(userData.name).trim()) {
       name = String(userData.name);
@@ -378,7 +409,7 @@ const enrichMappedFreelancer = async ({
   }
 
   const portfolioData = await readSuccessData(
-    `http://localhost:5000/api/freelancers/${freelancer.id}/portfolio`,
+    `${API_BASE}/freelancers/${freelancer.id}/portfolio`,
     token
   );
   if (Array.isArray(portfolioData)) {
@@ -421,7 +452,15 @@ const mapBackendMessage = (
   if (Array.isArray(attachments) && attachments.length > 0) {
     const first = attachments[0];
     if (typeof first === 'string' && first.trim()) {
-      attachment = { name: first.trim(), size: '', type: '' };
+      const url = first.trim();
+      const isUrl = /^https?:\/\//i.test(url);
+      const fileName = isUrl ? decodeURIComponent(url.split('/').pop() || url) : url;
+      attachment = {
+        name: isUrl && data.message ? String(data.message) : fileName,
+        size: '',
+        type: '',
+        ...(isUrl ? { url } : {})
+      };
     }
   }
 
@@ -456,7 +495,7 @@ const mapBackendTransaction = (data: Record<string, unknown>): WalletTransaction
     amount: toProjectNumber(data.amount),
     platformFee: data.commission == null ? 0 : toProjectNumber(data.commission),
     status: 'completed',
-    date: '',
+    date: data.created_at ? String(data.created_at).slice(0, 10) : '',
     description: ''
   };
 };
@@ -535,7 +574,7 @@ const resolveConversationId = async ({
   preferredId?: string;
 }): Promise<string | null> => {
   const conversationsData = await readSuccessData(
-    'http://localhost:5000/api/conversations',
+    `${API_BASE}/conversations`,
     token
   );
 
@@ -592,7 +631,7 @@ const enrichMappedContract = async ({
   } else if (contract.projectId) {
     const projectData = asRecord(
       await readSuccessData(
-        `http://localhost:5000/api/projects/${contract.projectId}`,
+        `${API_BASE}/projects/${contract.projectId}`,
         token
       )
     );
@@ -605,7 +644,7 @@ const enrichMappedContract = async ({
   if (contract.freelancerId) {
     const freelancerData = asRecord(
       await readSuccessData(
-        `http://localhost:5000/api/freelancers/${contract.freelancerId}`,
+        `${API_BASE}/freelancers/${contract.freelancerId}`,
         token
       )
     );
@@ -614,7 +653,7 @@ const enrichMappedContract = async ({
       if (freelancerData.user_id != null) {
         const userData = asRecord(
           await readSuccessData(
-            `http://localhost:5000/api/users/${freelancerData.user_id}`,
+            `${API_BASE}/users/${freelancerData.user_id}`,
             token
           )
         );
@@ -630,7 +669,7 @@ const enrichMappedContract = async ({
 
   if (specialtyId != null && String(specialtyId).trim() !== '') {
     const specialtiesData = await readSuccessData(
-      'http://localhost:5000/api/specialties',
+      `${API_BASE}/specialties`,
       token
     );
     if (Array.isArray(specialtiesData)) {
@@ -649,11 +688,11 @@ const enrichMappedContract = async ({
     }
   } else if (contract.clientId) {
     const clientData = asRecord(
-      await readSuccessData(`http://localhost:5000/api/clients/${contract.clientId}`, token)
+      await readSuccessData(`${API_BASE}/clients/${contract.clientId}`, token)
     );
     if (clientData?.user_id != null) {
       const clientUser = asRecord(
-        await readSuccessData(`http://localhost:5000/api/users/${clientData.user_id}`, token)
+        await readSuccessData(`${API_BASE}/users/${clientData.user_id}`, token)
       );
       if (clientUser?.name != null && String(clientUser.name).trim()) {
         clientName = String(clientUser.name);
@@ -674,7 +713,7 @@ const enrichMappedContract = async ({
 
 export default function App() {
   // Persistence state
-  const [clientProfile, setClientProfile] = useState<ClientProfile>(initialClientProfile);
+  const [clientProfile, setClientProfile] = useState<ClientProfile>(buildInitialClientProfile);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState('');
 
@@ -728,6 +767,7 @@ export default function App() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
 
   const [disputes, setDisputes] = useState<DisputeRecord[]>([]);
+  const [inviteTarget, setInviteTarget] = useState<FreelancerItem | null>(null);
   const [disputesError, setDisputesError] = useState('');
   const submittingDispute = useRef(false);
 
@@ -779,7 +819,7 @@ export default function App() {
       }
 
       try {
-        const response = await fetch(`http://localhost:5000/api/clients/${profileId}`, {
+        const response = await fetch(`${API_BASE}/clients/${profileId}`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`
@@ -848,7 +888,7 @@ export default function App() {
 
       try {
         const response = await fetch(
-          `http://localhost:5000/api/clients/${profileId}/projects`,
+          `${API_BASE}/clients/${profileId}/projects`,
           {
             method: 'GET',
             headers: {
@@ -936,7 +976,7 @@ export default function App() {
     const loadProjectProposals = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/projects/${projectId}/proposals`,
+          `${API_BASE}/projects/${projectId}/proposals`,
           {
             method: 'GET',
             headers: {
@@ -1004,7 +1044,7 @@ export default function App() {
 
     const loadMatchingUsage = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/ai/usage', {
+        const response = await fetch(`${API_BASE}/ai/usage`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const payload = await response.json().catch(() => null);
@@ -1047,7 +1087,7 @@ export default function App() {
 
     const loadFreelancers = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/freelancers', {
+        const response = await fetch(`${API_BASE}/freelancers`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`
@@ -1085,7 +1125,7 @@ export default function App() {
 
         const specialtyNameById = new Map<string, string>();
         const specialtiesData = await readSuccessData(
-          'http://localhost:5000/api/specialties',
+          `${API_BASE}/specialties`,
           token
         );
         if (Array.isArray(specialtiesData)) {
@@ -1157,7 +1197,7 @@ export default function App() {
 
     try {
       const walletData = asRecord(
-        await readSuccessData('http://localhost:5000/api/wallet', token)
+        await readSuccessData(`${API_BASE}/wallet`, token)
       );
       if (walletData) {
         setWalletBalance(toProjectNumber(walletData.balance));
@@ -1172,7 +1212,7 @@ export default function App() {
 
     try {
       const txData = await readSuccessData(
-        'http://localhost:5000/api/wallet/transactions',
+        `${API_BASE}/wallet/transactions`,
         token
       );
       if (Array.isArray(txData)) {
@@ -1259,7 +1299,7 @@ export default function App() {
 
       try {
         const data = await readSuccessData(
-          'http://localhost:5000/api/notifications',
+          `${API_BASE}/notifications`,
           token
         );
 
@@ -1286,9 +1326,11 @@ export default function App() {
     };
 
     loadNotifications();
+    const refreshTimer = window.setInterval(loadNotifications, 30000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -1302,7 +1344,7 @@ export default function App() {
       }
 
       try {
-        const data = await readSuccessData('http://localhost:5000/api/contracts', token);
+        const data = await readSuccessData(`${API_BASE}/contracts`, token);
         if (!Array.isArray(data) || cancelled) {
           return;
         }
@@ -1320,7 +1362,7 @@ export default function App() {
                 contract,
                 token,
                 projects: [],
-                clientProfile: initialClientProfile
+                clientProfile: buildInitialClientProfile()
               })
             );
           } catch {
@@ -1415,7 +1457,7 @@ export default function App() {
           let loadedMessages: ChatMessage[] = [];
           try {
             const messagesData = await readSuccessData(
-              `http://localhost:5000/api/conversations/${conversationId}/messages`,
+              `${API_BASE}/conversations/${conversationId}/messages`,
               token
             );
             if (Array.isArray(messagesData)) {
@@ -1455,7 +1497,7 @@ export default function App() {
       return;
     }
 
-    const socket = io('http://localhost:5000', {
+    const socket = io(API_ORIGIN, {
       path: '/socket.io',
       auth: { token },
       autoConnect: true,
@@ -1590,7 +1632,7 @@ export default function App() {
       void (async () => {
         try {
           const scopeData = await readSuccessData(
-            `http://localhost:5000/api/contracts/${contract.id}/scope-changes`,
+            `${API_BASE}/contracts/${contract.id}/scope-changes`,
             token
           );
 
@@ -1650,7 +1692,7 @@ export default function App() {
       void (async () => {
         try {
           const tasksData = await readSuccessData(
-            `http://localhost:5000/api/contracts/${contract.id}/tasks`,
+            `${API_BASE}/contracts/${contract.id}/tasks`,
             token
           );
 
@@ -1684,6 +1726,18 @@ export default function App() {
   };
 
   // Notification handlers
+  const markAllNotificationsRead = async () => {
+    if (!notifications.some((item) => !item.isRead)) {
+      return;
+    }
+    try {
+      await clientRequest('/notifications/read-all', { method: 'PATCH', body: {} });
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+    } catch {
+      // Keep the current state; the user can retry.
+    }
+  };
+
   const markNotificationRead = async (id: string) => {
     if (!isBackendProjectId(id) || markingNotificationIds.current.has(id)) {
       return;
@@ -1703,7 +1757,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/notifications/${id}/read`,
+        `${API_BASE}/notifications/${id}/read`,
         {
           method: 'PATCH',
           headers: {
@@ -1751,7 +1805,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/projects', {
+      const response = await fetch(`${API_BASE}/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1811,7 +1865,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/proposals/${proposalId}/accept`,
+        `${API_BASE}/proposals/${proposalId}/accept`,
         {
           method: 'PATCH',
           headers: {
@@ -1908,7 +1962,7 @@ export default function App() {
 
       try {
         const contractResponse = await fetch(
-          `http://localhost:5000/api/contracts/${returnedContractId}`,
+          `${API_BASE}/contracts/${returnedContractId}`,
           {
             method: 'GET',
             headers: {
@@ -1956,7 +2010,7 @@ export default function App() {
         let loadedTasks: TaskItem[] = [];
         try {
           const tasksData = await readSuccessData(
-            `http://localhost:5000/api/contracts/${enrichedContract.id}/tasks`,
+            `${API_BASE}/contracts/${enrichedContract.id}/tasks`,
             token
           );
           if (Array.isArray(tasksData)) {
@@ -1974,7 +2028,7 @@ export default function App() {
         let loadedScopeChanges: ScopeChangeRequest[] = [];
         try {
           const scopeData = await readSuccessData(
-            `http://localhost:5000/api/contracts/${enrichedContract.id}/scope-changes`,
+            `${API_BASE}/contracts/${enrichedContract.id}/scope-changes`,
             token
           );
           if (Array.isArray(scopeData)) {
@@ -2011,7 +2065,7 @@ export default function App() {
         if (conversationId) {
           try {
             const messagesData = await readSuccessData(
-              `http://localhost:5000/api/conversations/${conversationId}/messages`,
+              `${API_BASE}/conversations/${conversationId}/messages`,
               token
             );
             if (Array.isArray(messagesData)) {
@@ -2070,7 +2124,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/proposals/${proposalId}/reject`,
+        `${API_BASE}/proposals/${proposalId}/reject`,
         {
           method: 'PATCH',
           headers: {
@@ -2126,7 +2180,7 @@ export default function App() {
     setMatchingError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/freelancer-matching', {
+      const response = await fetch(`${API_BASE}/ai/freelancer-matching`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2267,7 +2321,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/scope-changes/${scopeChangeId}/approve`,
+        `${API_BASE}/scope-changes/${scopeChangeId}/approve`,
         {
           method: 'PATCH',
           headers: {
@@ -2336,7 +2390,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/scope-changes/${scopeChangeId}/reject`,
+        `${API_BASE}/scope-changes/${scopeChangeId}/reject`,
         {
           method: 'PATCH',
           headers: {
@@ -2413,7 +2467,7 @@ export default function App() {
     togglingTaskIds.current.add(taskId);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
+      const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2483,7 +2537,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/contracts/${contractId}/tasks`, {
+      const response = await fetch(`${API_BASE}/contracts/${contractId}/tasks`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2527,7 +2581,11 @@ export default function App() {
   };
 
   // Live Chat send message
-  const handleSendMessage = async (targetId: string, messageText: string) => {
+  const handleSendMessage = async (
+    targetId: string,
+    messageText: string,
+    attachments?: string[]
+  ) => {
     if (!targetId || !messageText.trim()) {
       return;
     }
@@ -2584,7 +2642,11 @@ export default function App() {
 
     socket.emit(
       'send_message',
-      { conversationId, message: messageText.trim() },
+      {
+        conversationId,
+        message: messageText.trim(),
+        ...(attachments && attachments.length > 0 ? { attachments } : {})
+      },
       (ack?: ChatAck) => {
         sendingConversationIds.current.delete(targetId);
 
@@ -2622,7 +2684,7 @@ export default function App() {
 
   const refreshContractFromBackend = async (contractId: string, token: string) => {
     const contractRow = asRecord(
-      await readSuccessData(`http://localhost:5000/api/contracts/${contractId}`, token)
+      await readSuccessData(`${API_BASE}/contracts/${contractId}`, token)
     );
     if (!contractRow) {
       return;
@@ -2668,7 +2730,7 @@ export default function App() {
 
       try {
         const response = await fetch(
-          `http://localhost:5000/api/wallet/escrow/${contractId}`,
+          `${API_BASE}/wallet/escrow/${contractId}`,
           {
             method: 'POST',
             headers: {
@@ -2700,7 +2762,7 @@ export default function App() {
         if (contract.projectId) {
           const projectRow = asRecord(
             await readSuccessData(
-              `http://localhost:5000/api/projects/${contract.projectId}`,
+              `${API_BASE}/projects/${contract.projectId}`,
               token
             )
           );
@@ -2731,7 +2793,7 @@ export default function App() {
 
       try {
         const statusResponse = await fetch(
-          `http://localhost:5000/api/contracts/${contractId}/status`,
+          `${API_BASE}/contracts/${contractId}/status`,
           {
             method: 'PATCH',
             headers: {
@@ -2777,7 +2839,7 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/wallet/release/${contractId}`,
+        `${API_BASE}/wallet/release/${contractId}`,
         {
           method: 'POST',
           headers: {
@@ -2827,7 +2889,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/wallet/topup', {
+      const response = await fetch(`${API_BASE}/wallet/topup`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2896,7 +2958,7 @@ export default function App() {
     submittingReviewIds.current.add(contractId);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/contracts/${contractId}/review`, {
+      const response = await fetch(`${API_BASE}/contracts/${contractId}/review`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2941,6 +3003,55 @@ export default function App() {
   };
 
   // Open Dispute — real POST /api/disputes only (no local fake success)
+  const loadDisputes = useCallback(async () => {
+    try {
+      const rows = await clientRequest<Record<string, unknown>[]>('/disputes');
+      const me = readHubUser();
+      const issueTypes: DisputeRecord['issueType'][] = ['delay', 'quality', 'scope_breach', 'communication', 'payment', 'other'];
+      const mapped: DisputeRecord[] = (Array.isArray(rows) ? rows : []).map((row) => {
+        const rawStatus = row.status == null ? '' : String(row.status);
+        const status: DisputeRecord['status'] =
+          rawStatus === 'resolved'
+            ? 'resolved'
+            : rawStatus === 'closed' || rawStatus === 'rejected'
+              ? 'closed'
+              : rawStatus === 'freelancer_response'
+                ? 'freelancer_response'
+                : 'under_review';
+        const iAmReporter = me?.id != null && String(row.reported_by) === String(me.id);
+        const counterpart = iAmReporter ? row.reported_against_name : row.reported_by_name;
+        const issueType = issueTypes.includes(row.issue_type as DisputeRecord['issueType'])
+          ? (row.issue_type as DisputeRecord['issueType'])
+          : 'other';
+        return {
+          id: String(row.id),
+          disputeNumber: `DSP-${String(row.id)}`,
+          contractId: row.contract_id == null ? '' : String(row.contract_id),
+          projectTitle: row.project_title == null ? '' : String(row.project_title),
+          freelancerName: counterpart == null ? '' : String(counterpart),
+          freelancerAvatar: initialsAvatar(counterpart == null ? '' : String(counterpart)),
+          issueType,
+          description: row.description == null ? '' : String(row.description),
+          evidenceAttachments: Array.isArray(row.evidence_attachments)
+            ? row.evidence_attachments.map((item) => String(item))
+            : [],
+          status,
+          filedAt: row.created_at ? String(row.created_at).slice(0, 10) : '',
+          ...(row.action_taken == null || !String(row.action_taken).trim()
+            ? {}
+            : { resolution: String(row.action_taken) })
+        };
+      });
+      setDisputes(mapped);
+    } catch (err) {
+      setDisputesError(errorText(err, 'Unable to load disputes.'));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDisputes();
+  }, [loadDisputes]);
+
   const handleOpenNewDispute = async (
     disputeData: Omit<DisputeRecord, 'id' | 'disputeNumber' | 'filedAt' | 'status'>
   ): Promise<boolean> => {
@@ -2984,7 +3095,7 @@ export default function App() {
         try {
           const freelancerData = asRecord(
             await readSuccessData(
-              `http://localhost:5000/api/freelancers/${contract.freelancerId}`,
+              `${API_BASE}/freelancers/${contract.freelancerId}`,
               token
             )
           );
@@ -3000,7 +3111,7 @@ export default function App() {
         body.evidence_attachments = disputeData.evidenceAttachments;
       }
 
-      const response = await fetch('http://localhost:5000/api/disputes', {
+      const response = await fetch(`${API_BASE}/disputes`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -3056,6 +3167,7 @@ export default function App() {
       };
 
       setDisputes((prev) => [mapped, ...prev.filter((d) => d.id !== mapped.id)]);
+      loadDisputes();
       setActiveTab('disputes');
       return true;
     } catch {
@@ -3101,7 +3213,7 @@ export default function App() {
     deletingProjectIds.current.add(projectId);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/projects/${projectId}`, {
+      const response = await fetch(`${API_BASE}/projects/${projectId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -3144,7 +3256,7 @@ export default function App() {
   };
 
   const handleInviteFreelancer = (freelancer: FreelancerItem) => {
-    alert(isArabic ? `تم إرسال دعوة للمستقل ${freelancer.name} للتقديم على مشاريعك المفتوحة!` : `Invitation sent to ${freelancer.name}!`);
+    setInviteTarget(freelancer);
   };
 
   const handleUpdateProfile = async (updated: Partial<ClientProfile>): Promise<boolean> => {
@@ -3166,16 +3278,28 @@ export default function App() {
       userBody.phone = phone || null;
     }
 
-    const clientBody: { company_name?: string | null } = {};
+    const clientBody: {
+      company_name?: string | null;
+      bio?: string | null;
+      location?: string | null;
+      website?: string | null;
+      logo?: string | null;
+    } = {};
     if (Object.prototype.hasOwnProperty.call(updated, 'companyName')) {
       const companyName = updated.companyName == null ? '' : String(updated.companyName).trim();
       clientBody.company_name = companyName || null;
+    }
+    for (const key of ['bio', 'location', 'website', 'logo'] as const) {
+      if (Object.prototype.hasOwnProperty.call(updated, key)) {
+        const value = updated[key] == null ? '' : String(updated[key]).trim();
+        clientBody[key] = value || null;
+      }
     }
 
     try {
       let userData: Record<string, unknown> | null = null;
       if (userBody.name != null || Object.prototype.hasOwnProperty.call(userBody, 'phone')) {
-        const userResponse = await fetch('http://localhost:5000/api/users/me', {
+        const userResponse = await fetch(`${API_BASE}/users/me`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -3204,8 +3328,8 @@ export default function App() {
       }
 
       let clientData: Record<string, unknown> | null = null;
-      if (Object.prototype.hasOwnProperty.call(clientBody, 'company_name')) {
-        const clientResponse = await fetch(`http://localhost:5000/api/clients/${profileId}`, {
+      if (Object.keys(clientBody).length > 0) {
+        const clientResponse = await fetch(`${API_BASE}/clients/${profileId}`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -3245,6 +3369,14 @@ export default function App() {
           ? {
               companyName:
                 clientData.company_name == null ? '' : String(clientData.company_name)
+            }
+          : {}),
+        ...(clientData
+          ? {
+              bio: clientData.bio == null ? '' : String(clientData.bio),
+              location: clientData.location == null ? '' : String(clientData.location),
+              website: clientData.website == null ? '' : String(clientData.website),
+              ...(clientData.logo ? { logo: String(clientData.logo) } : {})
             }
           : {})
       }));
@@ -3299,6 +3431,12 @@ export default function App() {
           openNewProjectModal={() => setIsNewProjectModalOpen(true)}
           isArabic={isArabic}
           clientProfile={clientProfile}
+          walletBalance={walletBalance}
+          pendingProposalsCount={proposals.filter((p) => p.status === 'pending').length}
+          unreadScopeChangesCount={contracts.reduce(
+            (sum, c) => sum + c.scopeChanges.filter((sc) => sc.status === 'pending').length,
+            0
+          )}
         />
       </div>
 
@@ -3307,6 +3445,7 @@ export default function App() {
         <Header
           notifications={notifications}
           markNotificationRead={markNotificationRead}
+          markAllNotificationsRead={markAllNotificationsRead}
           onNavigateTab={(tab) => setActiveTab(tab as ActiveTab)}
           isArabic={isArabic}
           toggleLanguage={toggleLanguage}
@@ -3611,6 +3750,14 @@ export default function App() {
         contract={contractForReview}
         onSubmitReview={handleSubmitReview}
         submitError={reviewsError}
+        isArabic={isArabic}
+      />
+
+      <InviteFreelancerModal
+        freelancer={inviteTarget}
+        projects={projects}
+        onClose={() => setInviteTarget(null)}
+        openNewProjectModal={() => setIsNewProjectModalOpen(true)}
         isArabic={isArabic}
       />
 

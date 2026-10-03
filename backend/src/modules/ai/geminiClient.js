@@ -63,6 +63,33 @@ const buildPrompt = ({ action, context }) => {
     ].join('\n');
   }
 
+  if (action === 'assistant') {
+    const role = context.role === 'freelancer' ? 'freelancer' : 'client';
+    const history = Array.isArray(context.history) ? context.history : [];
+    const transcript = history
+      .map((turn) => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.text}`)
+      .join('\n');
+
+    return [
+      'You are the Hub Freelance AI Advisor, a helpful assistant inside a freelance marketplace.',
+      `You are talking to a ${role} on the platform.`,
+      'Platform facts you can rely on:',
+      '- Clients post projects; freelancers send proposals; accepting a proposal creates a contract.',
+      '- The client funds escrow from their wallet before work starts; payment is released after delivery.',
+      '- The platform keeps a 5% commission when payment is released.',
+      '- Freelancers can request scope changes (price/duration); clients approve or reject them.',
+      '- Either side can open a dispute; an admin reviews it.',
+      'Answer the user question clearly and concisely in the same language the user writes in.',
+      'Give practical advice (scoping, budgets, timelines, proposals, collaboration).',
+      'You cannot perform actions on the platform; never claim you changed data.',
+      'Reply with plain text only (no markdown tables).',
+      '',
+      transcript ? `Conversation so far:\n${transcript}\n` : '',
+      `User: ${context.message}`,
+      'Assistant:',
+    ].join('\n');
+  }
+
   if (action === 'description-assistant') {
     return [
       'You are an advisor for Hub Freelance.',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   User,
   Building2,
@@ -12,6 +12,15 @@ import {
   Check
 } from 'lucide-react';
 import { ClientProfile } from '../../types';
+import { clientRequest, errorText, uploadFile } from '../../api';
+
+type NotificationPreferences = {
+  email_notifications: boolean;
+  proposal_updates: boolean;
+  project_updates: boolean;
+  payment_updates: boolean;
+  dispute_updates: boolean;
+};
 
 interface SettingsViewProps {
   clientProfile: ClientProfile;
@@ -42,6 +51,117 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   });
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
+
+  const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [preferencesError, setPreferencesError] = useState('');
+  const [savingPreference, setSavingPreference] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeSubTab !== 'notifications' || preferences) {
+      return;
+    }
+    clientRequest<NotificationPreferences>('/users/me/preferences')
+      .then((data) => {
+        setPreferences(data);
+        setPreferencesError('');
+      })
+      .catch((err) =>
+        setPreferencesError(errorText(err, isArabic ? 'تعذر تحميل التفضيلات' : 'Unable to load preferences'))
+      );
+  }, [activeSubTab, preferences, isArabic]);
+
+  const togglePreference = async (key: keyof NotificationPreferences) => {
+    if (!preferences || savingPreference) {
+      return;
+    }
+    const nextValue = !preferences[key];
+    setSavingPreference(key);
+    setPreferences({ ...preferences, [key]: nextValue });
+    try {
+      const data = await clientRequest<NotificationPreferences>('/users/me/preferences', {
+        method: 'PATCH',
+        body: { [key]: nextValue }
+      });
+      setPreferences(data);
+      setPreferencesError('');
+    } catch (err) {
+      setPreferences({ ...preferences, [key]: !nextValue });
+      setPreferencesError(errorText(err, isArabic ? 'تعذر حفظ التفضيل' : 'Unable to save preference'));
+    } finally {
+      setSavingPreference(null);
+    }
+  };
+
+  const handleLogoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setLogoError(isArabic ? 'يرجى اختيار صورة' : 'Please choose an image file');
+      return;
+    }
+    setLogoUploading(true);
+    setLogoError('');
+    try {
+      const uploaded = await uploadFile(file);
+      const ok = await onUpdateProfile({ logo: uploaded.file_url });
+      if (!ok) {
+        setLogoError(isArabic ? 'تعذر حفظ الشعار' : 'Unable to save logo');
+      }
+    } catch (err) {
+      setLogoError(errorText(err, isArabic ? 'تعذر رفع الشعار' : 'Unable to upload logo'));
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordSaving) {
+      return;
+    }
+    if (!passwords.current || !passwords.next) {
+      setPasswordMessage({ ok: false, text: isArabic ? 'يرجى ملء جميع الحقول' : 'Please fill in all fields' });
+      return;
+    }
+    if (passwords.next.length < 8) {
+      setPasswordMessage({
+        ok: false,
+        text: isArabic ? 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل' : 'New password must be at least 8 characters'
+      });
+      return;
+    }
+    if (passwords.next !== passwords.confirm) {
+      setPasswordMessage({ ok: false, text: isArabic ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match' });
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordMessage(null);
+    try {
+      await clientRequest('/auth/change-password', {
+        method: 'POST',
+        body: { current_password: passwords.current, new_password: passwords.next }
+      });
+      setPasswords({ current: '', next: '', confirm: '' });
+      setPasswordMessage({ ok: true, text: isArabic ? 'تم تحديث كلمة المرور بنجاح' : 'Password updated successfully' });
+    } catch (err) {
+      setPasswordMessage({
+        ok: false,
+        text: errorText(err, isArabic ? 'تعذر تحديث كلمة المرور' : 'Unable to update password')
+      });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   useEffect(() => {
     setFormData({
@@ -63,7 +183,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     setIsSaving(true);
     try {
-      const succeeded = await onUpdateProfile(formData);
+      const { email: _email, ...editable } = formData;
+      const succeeded = await onUpdateProfile(editable);
       if (succeeded) {
         setSavedSuccess(true);
         setTimeout(() => setSavedSuccess(false), 3000);
@@ -154,15 +275,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200 shadow-sm"
             />
             <div className="space-y-1.5">
-              <h3 className="text-sm font-bold text-slate-900">{clientProfile.companyName}</h3>
+              <h3 className="text-sm font-bold text-slate-900">{clientProfile.companyName || clientProfile.name}</h3>
               <p className="text-xs text-slate-400">{isArabic ? 'حساب عميل رسمي معتمد' : 'Verified Client Entity'}</p>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                className="hidden"
+                onChange={handleLogoSelected}
+              />
               <button
                 type="button"
-                onClick={() => alert(isArabic ? 'تم تفعيل اختيار الشعار الجديد' : 'Logo upload triggered')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200"
+                disabled={logoUploading}
+                onClick={() => logoInputRef.current?.click()}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200 disabled:opacity-50"
               >
-                {isArabic ? 'تغيير الشعار' : 'Change Logo'}
+                {logoUploading
+                  ? isArabic ? 'جاري الرفع...' : 'Uploading...'
+                  : isArabic ? 'تغيير الشعار' : 'Change Logo'}
               </button>
+              {logoError && <p className="text-[11px] font-bold text-red-600">{logoError}</p>}
             </div>
           </div>
 
@@ -189,7 +321,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none"
-                required
               />
             </div>
 
@@ -200,9 +331,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none"
-                required
+                readOnly
+                title={isArabic ? 'لا يمكن تغيير البريد الإلكتروني' : 'Email cannot be changed'}
+                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 outline-none cursor-not-allowed"
               />
             </div>
 
@@ -263,7 +394,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             ) : (
               <span className="text-xs text-slate-400">
-                {isArabic ? 'يتم حفظ التغييرات على مستوى الجلسة' : 'Profile updates sync automatically'}
+                {isArabic ? 'يتم حفظ التغييرات في حسابك على الخادم' : 'Changes are saved to your account'}
               </span>
             )}
 
@@ -281,42 +412,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Security Tab */}
       {activeSubTab === 'security' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-5 max-w-xl text-xs">
+        <form
+          onSubmit={handleChangePassword}
+          className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-5 max-w-xl text-xs"
+        >
           <h3 className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">
             {isArabic ? 'تغيير كلمة المرور' : 'Change Password'}
           </h3>
 
           <div className="space-y-3">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                {isArabic ? 'كلمة المرور الحالية' : 'Current Password'}
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none"
-              />
-            </div>
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                {isArabic ? 'كلمة المرور الجديدة' : 'New Password'}
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none"
-              />
-            </div>
+            {([
+              ['current', isArabic ? 'كلمة المرور الحالية' : 'Current Password', 'current-password'],
+              ['next', isArabic ? 'كلمة المرور الجديدة' : 'New Password', 'new-password'],
+              ['confirm', isArabic ? 'تأكيد كلمة المرور الجديدة' : 'Confirm New Password', 'new-password']
+            ] as const).map(([key, label, autoComplete]) => (
+              <div key={key}>
+                <label className="font-bold text-slate-700 block mb-1">{label}</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete={autoComplete}
+                  value={passwords[key]}
+                  onChange={(e) => setPasswords({ ...passwords, [key]: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none"
+                />
+              </div>
+            ))}
           </div>
 
+          {passwordMessage && (
+            <p className={`text-xs font-bold ${passwordMessage.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+              {passwordMessage.text}
+            </p>
+          )}
+
           <button
-            type="button"
-            onClick={() => alert(isArabic ? 'تم تحديث كلمة المرور بنجاح' : 'Password updated')}
-            className="bg-[#122338] text-white font-bold px-4 py-2 rounded-xl text-xs"
+            type="submit"
+            disabled={passwordSaving}
+            className="bg-[#122338] text-white font-bold px-4 py-2 rounded-xl text-xs disabled:opacity-50"
           >
-            {isArabic ? 'تحديث كلمة المرور' : 'Update Password'}
+            {passwordSaving
+              ? isArabic ? 'جاري الحفظ...' : 'Saving...'
+              : isArabic ? 'تحديث كلمة المرور' : 'Update Password'}
           </button>
-        </div>
+        </form>
       )}
 
       {/* Preferences Tab */}
@@ -344,29 +483,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div className="space-y-3 pt-2">
-            <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-blue-600" />
-              <div>
-                <span className="font-bold text-slate-800 block">
-                  {isArabic ? 'إشعارات العروض الجديدة فورا' : 'Instant proposal alerts'}
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  {isArabic ? 'إرسال تنبيه فور تقديم فريلانسر لعرض على مشاريعك' : 'Receive instant notification when bids arrive'}
-                </span>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-blue-600" />
-              <div>
-                <span className="font-bold text-slate-800 block">
-                  {isArabic ? 'تنبيهات طلبات تعديل النطاق (Scope Changes)' : 'Scope change alerts'}
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  {isArabic ? 'تنبيه مباشر عند طلب المستقل تعديل سعر أو موعد تسليم' : 'Instant alert on price/schedule adjustments'}
-                </span>
-              </div>
-            </label>
+            {preferencesError && <p className="text-xs font-bold text-red-600">{preferencesError}</p>}
+            {!preferences && !preferencesError && (
+              <p className="text-xs text-slate-500">{isArabic ? 'جاري تحميل التفضيلات...' : 'Loading preferences...'}</p>
+            )}
+            {preferences &&
+              ([
+                ['proposal_updates', isArabic ? 'إشعارات العروض الجديدة فوراً' : 'Instant proposal alerts', isArabic ? 'تنبيه فور تقديم فريلانسر لعرض على مشاريعك' : 'Get notified when freelancers submit proposals'],
+                ['project_updates', isArabic ? 'تحديثات المشاريع وتعديل النطاق' : 'Project & scope change alerts', isArabic ? 'تنبيه عند طلب تعديل النطاق أو تسليم العمل' : 'Scope change requests, deliveries and contract updates'],
+                ['payment_updates', isArabic ? 'تحديثات الدفعات والمحفظة' : 'Payment updates', isArabic ? 'الضمان وتحرير الدفعات والاشتراكات' : 'Escrow, releases and subscription changes'],
+                ['dispute_updates', isArabic ? 'تحديثات النزاعات' : 'Dispute updates', isArabic ? 'فتح النزاعات وقرارات الإدارة' : 'New disputes and admin decisions']
+              ] as const).map(([key, title, subtitle]) => (
+                <label key={key} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={preferences[key]}
+                    disabled={savingPreference !== null}
+                    onChange={() => togglePreference(key)}
+                    className="w-4 h-4 rounded text-blue-600"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 block">{title}</span>
+                    <span className="text-[11px] text-slate-400">{subtitle}</span>
+                  </div>
+                </label>
+              ))}
           </div>
         </div>
       )}

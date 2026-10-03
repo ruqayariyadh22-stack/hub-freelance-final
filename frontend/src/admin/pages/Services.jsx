@@ -122,7 +122,7 @@ export default function Services() {
             </button>
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button danger"
               disabled={busyId === item.id}
               onClick={() => {
                 if (!window.confirm(isArabic ? 'حذف الخدمة؟' : 'Delete service?')) return;

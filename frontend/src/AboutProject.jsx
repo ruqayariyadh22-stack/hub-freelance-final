@@ -17,17 +17,46 @@ import {
 } from "lucide-react";
 
 import HubLogo from "./shared/HubLogo";
+import { API_BASE } from "./shared/apiConfig.js";
 
 export default function AboutProject() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [contact, setContact] = useState({ name: "", email: "", message: "" });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSent(true);
+    if (sending) return;
 
-    setTimeout(() => {
-      setSent(false);
-    }, 3500);
+    setSending(true);
+    setSendError("");
+
+    try {
+      const response = await fetch(`${API_BASE}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: contact.name.trim(),
+          email: contact.email.trim(),
+          message: contact.message.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload?.success) {
+        setSendError(payload?.message || "Unable to send your note. Please try again later.");
+        return;
+      }
+
+      setContact({ name: "", email: "", message: "" });
+      setSent(true);
+      setTimeout(() => setSent(false), 3500);
+    } catch {
+      setSendError("Unable to reach the server. Please try again later.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -392,7 +421,13 @@ export default function AboutProject() {
 
             <label>
               Name
-              <input type="text" placeholder="Enter your name" required />
+              <input
+                type="text"
+                placeholder="Enter your name"
+                required
+                value={contact.name}
+                onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
+              />
             </label>
 
             <label>
@@ -401,6 +436,8 @@ export default function AboutProject() {
                 type="email"
                 placeholder="example@email.com"
                 required
+                value={contact.email}
+                onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
               />
             </label>
 
@@ -410,13 +447,17 @@ export default function AboutProject() {
                 placeholder="your note..."
                 rows="5"
                 required
+                value={contact.message}
+                onChange={(e) => setContact((c) => ({ ...c, message: e.target.value }))}
               ></textarea>
             </label>
 
-            <button type="submit">
-              إرسال الملاحظات
+            <button type="submit" disabled={sending}>
+              {sending ? "جاري الإرسال..." : "إرسال الملاحظات"}
               <ArrowRight size={17} />
             </button>
+
+            {sendError && <div className="success-message" style={{ color: "#dc2626" }}>{sendError}</div>}
 
             {sent && (
               <div className="success-message">

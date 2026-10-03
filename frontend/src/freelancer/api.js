@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api';
+import { API_BASE } from '../shared/apiConfig.js';
 
 const getToken = () => localStorage.getItem('hub_token');
 
@@ -41,8 +41,9 @@ export const freelancerRequest = async (path, options = {}) => {
     throw new FreelancerApiError('Authentication required', 401);
   }
 
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}),
     Authorization: `Bearer ${token}`,
     ...(options.headers || {}),
   };
@@ -100,6 +101,17 @@ export const freelancerPatch = (path, body = {}) =>
     method: 'PATCH',
     body: JSON.stringify(body),
   });
+
+export const freelancerUpload = (path, file, fields = {}) => {
+  const form = new FormData();
+  form.append('file', file);
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      form.append(key, value);
+    }
+  });
+  return freelancerRequest(path, { method: 'POST', body: form });
+};
 
 export const freelancerDelete = (path) =>
   freelancerRequest(path, {

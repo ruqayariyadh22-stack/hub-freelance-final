@@ -51,12 +51,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const inProgressProjectsCount = projects.filter((p) => p.status === 'in_progress').length;
   const draftProjectsCount = projects.filter((p) => p.status === 'draft').length;
 
-  const categories = [
-    { name: isArabic ? 'تطوير البرمجيات (Development)' : 'Development', count: 4, percent: 45 },
-    { name: isArabic ? 'تصميم واجهات و UI/UX' : 'Design & UI/UX', count: 3, percent: 30 },
-    { name: isArabic ? 'كتابة المحتوى والسيو' : 'Writing & SEO', count: 2, percent: 15 },
-    { name: isArabic ? 'التسويق الرقمي' : 'Digital Marketing', count: 1, percent: 10 }
-  ];
+  const releasedContracts = contracts.filter((c) => c.paymentStatus === 'released');
+  const totalSpent = releasedContracts.reduce((acc, c) => acc + (Number(c.contractValue) || 0), 0);
+
+  const categoryCounts = projects.reduce<Record<string, number>>((acc, p) => {
+    const key = p.category?.trim() || (isArabic ? 'غير مصنف' : 'Uncategorized');
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const categories = Object.entries(categoryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percent: projects.length ? Math.round((count / projects.length) * 100) : 0
+    }));
+
+  const completionPercent = projects.length
+    ? Math.round((completedProjectsCount / projects.length) * 100)
+    : 0;
+
+  const monthFormatter = new Intl.DateTimeFormat(isArabic ? 'ar' : 'en', { month: 'short' });
+  const now = new Date();
+  const spendByMonth = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const total = contracts
+      .filter((c) => {
+        const start = c.startDate ? new Date(c.startDate) : null;
+        return (
+          start &&
+          !Number.isNaN(start.getTime()) &&
+          start.getFullYear() === date.getFullYear() &&
+          start.getMonth() === date.getMonth()
+        );
+      })
+      .reduce((acc, c) => acc + (Number(c.contractValue) || 0), 0);
+    return { label: monthFormatter.format(date), total };
+  });
+  const maxMonthlySpend = Math.max(0, ...spendByMonth.map((m) => m.total));
+
+  const pendingScopeChange = contracts
+    .flatMap((c) =>
+      c.scopeChanges
+        .filter((sc) => sc.status === 'pending')
+        .map((sc) => ({ contract: c, scopeChange: sc }))
+    )[0];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -119,10 +159,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-slate-900">$12,480</div>
+          <div className="text-2xl font-extrabold text-slate-900">${totalSpent.toLocaleString()}</div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>+12% {isArabic ? 'مقارنة بالشهر الماضي' : 'vs last month'}</span>
+            <span>
+              {releasedContracts.length} {isArabic ? 'دفعات محررة للمستقلين' : 'payments released'}
+            </span>
           </div>
         </div>
 
@@ -186,56 +228,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </div>
             <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-              {isArabic ? 'آخر 30 يوماً' : 'Last 30 Days'}
+              {isArabic ? 'آخر 6 أشهر' : 'Last 6 Months'}
             </span>
           </div>
 
-          {/* Simple Visual Bar Chart */}
+          {/* Contract value per month */}
           <div className="h-44 flex items-end justify-between gap-2 sm:gap-4 pt-6 px-2 border-b border-slate-100">
-            {[
-              { day: isArabic ? 'السبت' : 'Sat', val: 40, spend: '$600' },
-              { day: isArabic ? 'الأحد' : 'Sun', val: 65, spend: '$950' },
-              { day: isArabic ? 'الإثنين' : 'Mon', val: 50, spend: '$750' },
-              { day: isArabic ? 'الثلاثاء' : 'Tue', val: 85, spend: '$1,300' },
-              { day: isArabic ? 'الأربعاء' : 'Wed', val: 70, spend: '$1,050' },
-              { day: isArabic ? 'الخميس' : 'Thu', val: 95, spend: '$1,500' },
-              { day: isArabic ? 'الجمعة' : 'Fri', val: 60, spend: '$800' }
-            ].map((item, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+            {spendByMonth.map((item) => (
+              <div key={item.label} className="flex-1 flex flex-col items-center gap-2 group">
                 <div className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded transition-opacity">
-                  {item.spend}
+                  ${item.total.toLocaleString()}
                 </div>
                 <div className="w-full max-w-[36px] bg-slate-100 rounded-t-lg h-32 flex items-end overflow-hidden p-0.5">
                   <div
-                    style={{ height: `${item.val}%` }}
+                    style={{ height: `${maxMonthlySpend ? Math.max(4, (item.total / maxMonthlySpend) * 100) : 0}%` }}
                     className="w-full bg-gradient-to-t from-blue-600 to-indigo-500 rounded-t-md group-hover:from-blue-500 group-hover:to-indigo-400 transition-all duration-300"
                   />
                 </div>
-                <span className="text-[11px] text-slate-400 font-medium">{item.day}</span>
+                <span className="text-[11px] text-slate-400 font-medium">{item.label}</span>
               </div>
             ))}
           </div>
+          {maxMonthlySpend === 0 && (
+            <p className="text-[11px] text-slate-400 mt-2 text-center">
+              {isArabic ? 'لا توجد عقود بعد لعرض الإنفاق.' : 'No contracts yet to chart spending.'}
+            </p>
+          )}
 
-          {/* Quick Notice regarding Scope Change */}
-          <div className="mt-5 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1 text-xs">
-              <span className="font-bold text-amber-900">
-                {isArabic ? 'تنبيه تعديل نطاق عمل قيد المراجعة:' : 'Pending Scope Change Request:'}
-              </span>
-              <p className="text-amber-800 mt-0.5">
-                {isArabic
-                  ? 'المستقلة مريم الصالح قدمت طلب تعديل على عقد تطبيق العقارات (+150$ و +3 أيام) لإضافة الوضع الليلي.'
-                  : 'Freelancer Maryam requested a scope modification (+ $150 & 3 days) for Real Estate App.'}
-              </p>
+          {/* Pending scope change (live) */}
+          {pendingScopeChange && (
+            <div className="mt-5 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 text-xs">
+                <span className="font-bold text-amber-900">
+                  {isArabic ? 'طلب تعديل نطاق بانتظار مراجعتك:' : 'Pending Scope Change Request:'}
+                </span>
+                <p className="text-amber-800 mt-0.5">
+                  {pendingScopeChange.contract.freelancerName}
+                  {' — '}
+                  {pendingScopeChange.contract.projectTitle}
+                  {pendingScopeChange.scopeChange.description ? `: ${pendingScopeChange.scopeChange.description}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  onSelectContract(pendingScopeChange.contract.id);
+                  setActiveTab('workspace');
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg shrink-0 transition-colors"
+              >
+                {isArabic ? 'مراجعة الطلب' : 'Review'}
+              </button>
             </div>
-            <button
-              onClick={() => setActiveTab('workspace')}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg shrink-0 transition-colors"
-            >
-              {isArabic ? 'مراجعة الطلب' : 'Review'}
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Right 1 Col: Project Status (Donut simulation) & Top Categories */}
@@ -258,7 +303,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   />
                   <path
                     className="text-blue-600"
-                    strokeDasharray="68, 100"
+                    strokeDasharray={`${completionPercent}, 100`}
                     strokeWidth="4"
                     strokeLinecap="round"
                     stroke="currentColor"
@@ -267,7 +312,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   />
                 </svg>
                 <div className="absolute text-center">
-                  <span className="text-lg font-black text-slate-800">68%</span>
+                  <span className="text-lg font-black text-slate-800">{completionPercent}%</span>
                   <span className="block text-[9px] text-slate-400 font-semibold">{isArabic ? 'إنجاز' : 'Done'}</span>
                 </div>
               </div>
@@ -312,6 +357,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {isArabic ? 'أبرز تصنيفات الأعمال' : 'Top Categories'}
             </h3>
             <div className="space-y-3">
+              {categories.length === 0 && (
+                <p className="text-xs text-slate-400">
+                  {isArabic ? 'انشر مشروعك الأول لعرض التصنيفات.' : 'Post your first project to see categories.'}
+                </p>
+              )}
               {categories.map((cat, i) => (
                 <div key={i} className="space-y-1">
                   <div className="flex justify-between text-xs">

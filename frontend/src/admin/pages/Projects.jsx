@@ -109,7 +109,7 @@ export default function Projects() {
           </select>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button danger"
             disabled={busyId === item.id}
             onClick={() => {
               if (!window.confirm(isArabic ? 'حذف المشروع؟' : 'Delete project?')) return;

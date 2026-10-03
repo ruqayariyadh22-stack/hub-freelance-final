@@ -14,6 +14,7 @@ import {
   findDisputeById,
   freelancerHasProposalOnProject,
   insertDispute,
+  listDisputesForUser,
 } from './disputesPersistence.js';
 
 export { assertNoActiveDispute } from '../wallet/escrow.js';
@@ -28,6 +29,15 @@ const toPublicDispute = (dispute) => ({
   evidence_attachments: dispute.evidence_attachments,
   status: dispute.status,
   action_taken: dispute.action_taken,
+  created_at: dispute.created_at,
+});
+
+const toListedDispute = (dispute) => ({
+  ...toPublicDispute(dispute),
+  project_title: dispute.project_title,
+  contract_id: dispute.contract_id,
+  reported_by_name: dispute.reported_by_name,
+  reported_against_name: dispute.reported_against_name,
 });
 
 const requireProject = (project) => {
@@ -150,4 +160,9 @@ export const getDisputeById = async (disputeId, actor) => {
   const dispute = requireDispute(await findDisputeById(disputeId));
   await requireDisputeParticipant(dispute, actor);
   return dispute;
+};
+
+export const listMyDisputes = async (actor) => {
+  const disputes = await listDisputesForUser(actor.id);
+  return disputes.map(toListedDispute);
 };

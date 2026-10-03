@@ -39,6 +39,9 @@ export default function Navbar() {
         <NavLink className={linkClass} to="/login" title="Login">
           Login
         </NavLink>
+        <NavLink className={linkClass} to="/register" title="Sign up">
+          Sign up
+        </NavLink>
       </div>
 
       <button
@@ -57,6 +60,9 @@ export default function Navbar() {
         </NavLink>
         <NavLink className={linkClass} to="/login" onClick={close}>
           Login
+        </NavLink>
+        <NavLink className={linkClass} to="/register" onClick={close}>
+          Sign up
         </NavLink>
       </div>
     </nav>

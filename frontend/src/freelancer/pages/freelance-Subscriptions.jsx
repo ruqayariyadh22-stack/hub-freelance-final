@@ -11,6 +11,7 @@ export default function Subscriptions({ lang, notify }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [noActive, setNoActive] = useState(false);
+  const [subscribeError, setSubscribeError] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -46,13 +47,23 @@ export default function Subscriptions({ lang, notify }) {
   const subscribe = async () => {
     if (busy) return;
     setBusy(true);
+    setSubscribeError(null);
     try {
       const created = await freelancerPost('/subscriptions', {});
       setSubscription(created);
       setNoActive(false);
       notify(t(lang, 'تم الاشتراك في Freelancer Pro', 'Subscribed to Freelancer Pro'));
     } catch (err) {
-      notify(errorMessage(err, t(lang, 'فشل الاشتراك', 'Subscription failed')));
+      const message =
+        err?.status === 409 && /balance/i.test(err.message || '')
+          ? t(
+              lang,
+              'رصيد محفظتك غير كافٍ لدفع الاشتراك.',
+              'Your wallet balance is not enough to pay for the subscription.',
+            )
+          : errorMessage(err, t(lang, 'فشل الاشتراك', 'Subscription failed'));
+      setSubscribeError(message);
+      notify(message);
     } finally {
       setBusy(false);
     }
@@ -140,6 +151,7 @@ export default function Subscriptions({ lang, notify }) {
                   </li>
                 ))}
               </ul>
+              {subscribeError && <p className="notice amber">{subscribeError}</p>}
               {noActive || !subscription ? (
                 <button className="primary" type="button" disabled={busy} onClick={subscribe}>
                   {busy

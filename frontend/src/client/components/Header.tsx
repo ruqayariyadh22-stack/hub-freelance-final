@@ -14,6 +14,7 @@ import { NotificationItem, ClientProfile } from '../types';
 interface HeaderProps {
   notifications: NotificationItem[];
   markNotificationRead: (id: string) => void;
+  markAllNotificationsRead?: () => void;
   onNavigateTab: (tab: string) => void;
   isArabic: boolean;
   toggleLanguage: () => void;
@@ -27,6 +28,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   notifications,
   markNotificationRead,
+  markAllNotificationsRead,
   onNavigateTab,
   isArabic,
   toggleLanguage,
@@ -171,7 +173,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="px-4 pt-2 border-t border-slate-100 text-center">
                   <button
                     onClick={() => {
-                      notifications.forEach((n) => markNotificationRead(n.id));
+                      if (markAllNotificationsRead) {
+                        markAllNotificationsRead();
+                      } else {
+                        notifications.forEach((n) => markNotificationRead(n.id));
+                      }
                     }}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >

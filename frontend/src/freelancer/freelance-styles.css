@@ -343,3 +343,28 @@
     width: 100%;
   }
 }
+/* Scrollable freelancer sidebar */
+.sidebar{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.sidebar nav{overflow:visible;flex:none}
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:999px}
+
+/* Header notifications dropdown */
+.notif-wrap{position:relative}
+.notif-dropdown{position:absolute;top:calc(100% + 10px);inset-inline-end:0;width:min(360px,calc(100vw - 30px));background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 22px 50px rgba(15,35,63,.16);z-index:60;overflow:hidden}
+.notif-dropdown-head{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid var(--line)}
+.notif-dropdown-head b{font-size:13px}
+.notif-dropdown-list{max-height:360px;overflow-y:auto}
+.notif-empty{text-align:center;color:var(--muted);font-size:11px;padding:28px 10px;margin:0}
+.notif-item{width:100%;display:flex;align-items:flex-start;gap:10px;padding:12px 15px;background:#fff;border-bottom:1px solid #f1f4f8;text-align:start;transition:.15s}
+.notif-item:hover{background:#f8fbff}
+.notif-item.unread{background:#f4f8ff}
+.notif-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none;background:transparent}
+.notif-item.unread .notif-dot{background:var(--blue)}
+.notif-text{display:grid;gap:3px;min-width:0}
+.notif-text b{font-size:11.5px;color:var(--text)}
+.notif-text small{font-size:10.5px;color:#5f6f86;line-height:1.6}
+.notif-text em{font-style:normal;font-size:9px;color:#a1acba}
+.notif-dropdown-foot{display:flex;justify-content:space-between;align-items:center;padding:10px 15px;background:#fbfcfe}
+.notif-dropdown-foot .link-btn{font-size:11px}
+.notif-dropdown-foot .link-btn:disabled{opacity:.4;cursor:default}

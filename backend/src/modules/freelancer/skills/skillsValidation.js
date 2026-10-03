@@ -48,10 +48,18 @@ export const validateAddSkill = (body = {}) => {
     });
   }
 
-  if (isBlankEntityId(body.skill_id)) {
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+
+  if (isBlankEntityId(body.skill_id) && name) {
+    if (name.length > 60) {
+      errors.push({ field: 'name', message: 'Skill name must be at most 60 characters' });
+    } else {
+      payload.name = name;
+    }
+  } else if (isBlankEntityId(body.skill_id)) {
     errors.push({
       field: 'skill_id',
-      message: 'Skill id is required',
+      message: 'Skill id or name is required',
     });
   } else {
     const skillId = parseEntityId(body.skill_id);
@@ -69,4 +77,13 @@ export const validateAddSkill = (body = {}) => {
   collectErrors(errors);
 
   return payload;
+};
+
+export const validateSkillIdParam = (id) => {
+  return requireEntityId(
+    id,
+    'skillId',
+    'Skill id is required',
+    'Skill id must be a valid integer',
+  );
 };

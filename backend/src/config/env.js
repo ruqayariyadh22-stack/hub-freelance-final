@@ -34,10 +34,15 @@ export const env = {
   smtpPassword:
     typeof process.env.SMTP_PASSWORD === 'string' ? process.env.SMTP_PASSWORD : '',
   smtpFrom: typeof process.env.SMTP_FROM === 'string' ? process.env.SMTP_FROM.trim() : '',
+  publicApiUrl:
+    typeof process.env.PUBLIC_API_URL === 'string' ? process.env.PUBLIC_API_URL.trim() : '',
   appBaseUrl:
     typeof process.env.APP_BASE_URL === 'string' ? process.env.APP_BASE_URL.trim() : '',
   geminiApiKey:
-    typeof process.env.GEMINI_API_KEY === 'string' ? process.env.GEMINI_API_KEY.trim() : '',
+    typeof process.env.GEMINI_API_KEY === 'string' &&
+    process.env.GEMINI_API_KEY.trim() !== 'your_gemini_api_key_here'
+      ? process.env.GEMINI_API_KEY.trim()
+      : '',
   geminiModel:
     typeof process.env.GEMINI_MODEL === 'string' && process.env.GEMINI_MODEL.trim()
       ? process.env.GEMINI_MODEL.trim()

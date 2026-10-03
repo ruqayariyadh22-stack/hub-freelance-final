@@ -2,6 +2,7 @@ import { AppError } from '../../utils/appError.js';
 import {
   findNotificationById,
   listNotificationsByUserId,
+  markAllNotificationsReadForUser,
   markNotificationReadForUser,
 } from './notificationsPersistence.js';
 
@@ -47,4 +48,9 @@ export const markNotificationRead = async (notificationId, actor) => {
   );
 
   return toPublicNotification(updated);
+};
+
+export const markAllNotificationsRead = async (actor) => {
+  const updated = await markAllNotificationsReadForUser(actor.id);
+  return { updated };
 };

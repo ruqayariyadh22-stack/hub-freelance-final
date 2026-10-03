@@ -3233,3 +3233,145 @@ tbody tr:last-child td {
 .logout-link:hover {
   background: rgba(239, 68, 68, 0.1);
 }
+/* Scrollable admin sidebar */
+.admin-sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.admin-sidebar-nav {
+  flex: none;
+  overflow: visible;
+}
+
+.admin-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+/* ===== Admin list pages: filters, actions, pagination ===== */
+.admin-filter-bar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.admin-filter-bar select {
+  min-height: 42px;
+  min-width: 160px;
+  padding: 0 14px;
+  border: 1px solid var(--client-border);
+  border-radius: 12px;
+  background: white;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: 0.16s;
+}
+
+.admin-filter-bar select:focus,
+.admin-filter-bar select:hover {
+  border-color: #bfdbfe;
+}
+
+.main-content .ghost-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--client-border);
+  border-radius: 9px;
+  background: white;
+  color: #334155;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.16s;
+}
+
+.main-content .ghost-button:hover:not(:disabled) {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: var(--client-blue);
+}
+
+.main-content .ghost-button.danger {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.main-content .ghost-button.danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.main-content .ghost-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.table-actions-cell > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid #eef2f7;
+  background: #fbfcfe;
+}
+
+.table-footer-total {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-page-indicator {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.table-card td,
+.table-card th {
+  font-size: 12px;
+}
+
+/* Keep English values (emails, names) readable inside RTL tables */
+.table-card td {
+  unicode-bidi: plaintext;
+}
+
+html[dir="rtl"] .table-card td {
+  text-align: right;
+}
+
+html[dir="ltr"] .table-card td {
+  text-align: left;
+}
+
+.table-footer {
+  flex-wrap: wrap;
+}

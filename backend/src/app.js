@@ -26,6 +26,10 @@ import adminRoutes from './modules/admin/adminRoutes.js';
 import aiRoutes from './modules/ai/aiRoutes.js';
 import contactRoutes from './modules/contact/contactRoutes.js';
 import { publicAdvertisementsRouter } from './modules/freelancer/advertisements/advertisementsRoutes.js';
+import invitationsRoutes from './modules/projects/invitations/invitationsRoutes.js';
+import uploadsRoutes from './modules/uploads/uploadsRoutes.js';
+import { skillsCatalogRouter } from './modules/freelancer/skills/skillsRoutes.js';
+import { UPLOADS_DIR, UPLOADS_ROUTE } from './modules/uploads/uploadStorage.js';
 
 const app = express();
 
@@ -36,6 +40,16 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  UPLOADS_ROUTE,
+  express.static(UPLOADS_DIR, {
+    fallthrough: false,
+    index: false,
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    },
+  }),
+);
 
 app.get(
   '/api/health',
@@ -69,6 +83,9 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertisements', publicAdvertisementsRouter);
+app.use('/api/invitations', invitationsRoutes);
+app.use('/api/uploads', uploadsRoutes);
+app.use('/api/skills', skillsCatalogRouter);
 
 app.use(notFound);
 app.use(errorHandler);

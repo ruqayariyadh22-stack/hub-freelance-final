@@ -294,8 +294,22 @@ export const getAdminDisputeById = async (disputeId) => {
 };
 
 export const updateAdminDisputeById = async (disputeId, payload) => {
-  const updated = await updateAdminDisputeFields(disputeId, payload);
-  return toPublicDispute(requireResource(updated, 'Dispute not found'));
+  const updated = requireResource(
+    await updateAdminDisputeFields(disputeId, payload),
+    'Dispute not found',
+  );
+
+  if (payload.status === 'resolved' || payload.status === 'closed') {
+    const recipients = new Set(
+      [updated.reported_by, updated.reported_against].filter((id) => id != null),
+    );
+
+    for (const userId of recipients) {
+      await notifyUser({ userId, type: NOTIFICATION_TYPES.DISPUTE_RESOLVED });
+    }
+  }
+
+  return toPublicDispute(updated);
 };
 
 export const listAdminReviews = async (filters) =>

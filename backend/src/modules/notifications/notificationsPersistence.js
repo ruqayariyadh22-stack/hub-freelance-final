@@ -53,7 +53,8 @@ export const listNotificationsByUserId = async (userId) => {
   const result = await query(
     `SELECT ${NOTIFICATION_COLUMNS}
      FROM notifications
-     WHERE user_id = $1`,
+     WHERE user_id = $1
+     ORDER BY created_at DESC, id DESC`,
     [userId],
   );
 
@@ -71,4 +72,16 @@ export const markNotificationReadForUser = async (notificationId, userId) => {
   );
 
   return result.rows[0] || null;
+};
+
+export const markAllNotificationsReadForUser = async (userId) => {
+  const result = await query(
+    `UPDATE notifications
+     SET is_read = TRUE
+     WHERE user_id = $1
+       AND is_read IS NOT TRUE`,
+    [userId],
+  );
+
+  return result.rowCount;
 };

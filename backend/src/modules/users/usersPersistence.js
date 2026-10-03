@@ -70,3 +70,26 @@ export const updateUserById = async (userId, payload) => {
 
   return result.rows[0] || null;
 };
+
+export const findNotificationPreferencesByUserId = async (userId) => {
+  const result = await query(
+    `SELECT notification_preferences
+     FROM users
+     WHERE id = $1`,
+    [userId],
+  );
+
+  return result.rows[0] ? result.rows[0].notification_preferences : undefined;
+};
+
+export const mergeNotificationPreferencesByUserId = async (userId, preferences) => {
+  const result = await query(
+    `UPDATE users
+     SET notification_preferences = COALESCE(notification_preferences, '{}'::jsonb) || $1::jsonb
+     WHERE id = $2
+     RETURNING notification_preferences`,
+    [JSON.stringify(preferences), userId],
+  );
+
+  return result.rows[0] ? result.rows[0].notification_preferences : undefined;
+};

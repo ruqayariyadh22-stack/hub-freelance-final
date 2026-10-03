@@ -4,10 +4,13 @@ const CLIENT_PROFILE_COLUMNS = `
   id,
   user_id,
   company_name,
-  logo
+  logo,
+  bio,
+  location,
+  website
 `;
 
-const UPDATABLE_COLUMNS = ['company_name', 'logo'];
+const UPDATABLE_COLUMNS = ['company_name', 'logo', 'bio', 'location', 'website'];
 
 const runQuery = (executor, text, params) => {
   if (typeof executor === 'function') {

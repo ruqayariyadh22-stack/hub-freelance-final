@@ -1,7 +1,12 @@
 import pg from 'pg';
 import { env } from './env.js';
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// Return DATE columns as plain 'YYYY-MM-DD' strings so they are not shifted by
+// the server time zone when serialized to JSON.
+const DATE_OID = 1082;
+types.setTypeParser(DATE_OID, (value) => value);
 
 export const getPoolConfig = () => {
   if (env.databaseUrl) {

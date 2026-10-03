@@ -2,7 +2,7 @@ import {
   validateCreateDispute,
   validateDisputeIdParam,
 } from './disputesValidation.js';
-import { createDispute, getDisputeById } from './disputesService.js';
+import { createDispute, getDisputeById, listMyDisputes } from './disputesService.js';
 
 export const create = async (req, res) => {
   const payload = validateCreateDispute(req.body);
@@ -17,6 +17,15 @@ export const create = async (req, res) => {
 export const getById = async (req, res) => {
   const disputeId = validateDisputeIdParam(req.params.id);
   const data = await getDisputeById(disputeId, req.user);
+
+  res.status(200).json({
+    success: true,
+    data,
+  });
+};
+
+export const listMine = async (req, res) => {
+  const data = await listMyDisputes(req.user);
 
   res.status(200).json({
     success: true,

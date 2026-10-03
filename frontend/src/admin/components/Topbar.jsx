@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { Globe2 } from "lucide-react";
 import { useLanguage } from "./LanguageContext";
+import { getAdminUser } from "../api";
 
 const names = {
   "/admin/dashboard": "Dashboard",
@@ -23,7 +24,7 @@ export default function Topbar() {
 
   let adminName = "Admin";
   try {
-    const user = JSON.parse(localStorage.getItem("hub_user") || "null");
+    const user = getAdminUser();
     if (user?.name) adminName = user.name;
   } catch {
     adminName = "Admin";

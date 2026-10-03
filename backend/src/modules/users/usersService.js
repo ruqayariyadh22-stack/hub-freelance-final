@@ -1,7 +1,14 @@
 import { AppError } from '../../utils/appError.js';
 import { findClientProfileByUserId } from '../projects/projectsPersistence.js';
 import { findFreelancerProfileByUserId } from '../proposals/proposalsPersistence.js';
-import { findPublicUserById, findUserById, updateUserById } from './usersPersistence.js';
+import {
+  findNotificationPreferencesByUserId,
+  findPublicUserById,
+  findUserById,
+  mergeNotificationPreferencesByUserId,
+  updateUserById,
+} from './usersPersistence.js';
+import { withDefaultPreferences } from './notificationPreferences.js';
 
 const toSelfUser = (user) => ({
   id: user.id,
@@ -75,4 +82,24 @@ export const updateCurrentUser = async (userId, payload) => {
 export const getUserById = async (userId) => {
   const user = await findPublicUserById(userId);
   return requirePublicProfile(user);
+};
+
+export const getNotificationPreferences = async (userId) => {
+  const stored = await findNotificationPreferencesByUserId(userId);
+
+  if (stored === undefined) {
+    throw new AppError('User not found', 404);
+  }
+
+  return withDefaultPreferences(stored);
+};
+
+export const updateNotificationPreferences = async (userId, payload) => {
+  const stored = await mergeNotificationPreferencesByUserId(userId, payload);
+
+  if (stored === undefined) {
+    throw new AppError('User not found', 404);
+  }
+
+  return withDefaultPreferences(stored);
 };

@@ -3,6 +3,11 @@ import {
   AWAITING_ESCROW,
   assertEscrowFunded,
 } from '../../wallet/escrow.js';
+import { findClientProfileById } from '../../client/clientPersistence.js';
+import {
+  NOTIFICATION_TYPES,
+  notifyUser,
+} from '../../notifications/notificationMessages.js';
 import { findClientProfileByUserId } from '../../projects/projectsPersistence.js';
 import { findFreelancerProfileByUserId } from '../../proposals/proposalsPersistence.js';
 import {
@@ -23,6 +28,13 @@ const toPublicContract = (contract) => ({
   start_date: contract.start_date,
   delivery_date: contract.delivery_date,
   payment_status: contract.payment_status,
+  ...(contract.project_title !== undefined
+    ? {
+        project_title: contract.project_title,
+        client_name: contract.client_name,
+        freelancer_name: contract.freelancer_name,
+      }
+    : {}),
 });
 
 const requireContract = (contract) => {
@@ -33,7 +45,7 @@ const requireContract = (contract) => {
   return toPublicContract(contract);
 };
 
-const assertContractParticipant = async (contract, actor) => {
+export const assertContractParticipant = async (contract, actor) => {
   if (actor?.role === 'client') {
     const profile = await findClientProfileByUserId(actor.id);
 
@@ -103,5 +115,18 @@ export const updateContractStatusById = async (contractId, actor, payload) => {
   }
 
   const updated = await updateContractStatusRow(contractId, payload.status);
-  return requireContract(updated);
+  const publicContract = requireContract(updated);
+
+  if (payload.status === 'delivered' && contract.status !== 'delivered') {
+    const clientProfile = await findClientProfileById(contract.client_id);
+
+    if (clientProfile?.user_id) {
+      await notifyUser({
+        userId: clientProfile.user_id,
+        type: NOTIFICATION_TYPES.CONTRACT_DELIVERED,
+      });
+    }
+  }
+
+  return publicContract;
 };

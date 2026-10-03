@@ -13,7 +13,8 @@ const TRANSACTION_COLUMNS = `
   contract_id,
   type,
   commission,
-  amount
+  amount,
+  created_at
 `;
 
 const runQuery = (executor, text, params) => {
@@ -109,7 +110,8 @@ export const listTransactionsByWalletId = async (walletId) => {
   const result = await query(
     `SELECT ${TRANSACTION_COLUMNS}
      FROM transactions
-     WHERE wallet_id = $1`,
+     WHERE wallet_id = $1
+     ORDER BY created_at DESC, id DESC`,
     [walletId],
   );
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -11,6 +11,16 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { DisputeRecord, Contract } from '../../types';
+import { errorText, uploadFile } from '../../api';
+
+const ISSUE_LABELS: Record<DisputeRecord['issueType'], [string, string]> = {
+  delay: ['تأخر في التسليم', 'Delay'],
+  quality: ['جودة غير مطابقة', 'Quality issue'],
+  scope_breach: ['إخلال بالعقد', 'Scope breach'],
+  communication: ['انقطاع التواصل', 'Communication'],
+  payment: ['مشكلة في الدفع', 'Payment issue'],
+  other: ['أخرى', 'Other']
+};
 
 interface DisputesViewProps {
   disputes: DisputeRecord[];
@@ -32,6 +42,33 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
   const [issueType, setIssueType] = useState<DisputeRecord['issueType']>('delay');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [evidence, setEvidence] = useState<{ name: string; url: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    if (!contracts.some((c) => c.id === selectedContractId) && contracts[0]) {
+      setSelectedContractId(contracts[0].id);
+    }
+  }, [contracts, selectedContractId]);
+
+  const handleEvidenceSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      for (const file of files) {
+        const uploaded = await uploadFile(file);
+        setEvidence((prev) => [...prev, { name: uploaded.file_name, url: uploaded.file_url }]);
+      }
+    } catch (err) {
+      setUploadError(errorText(err, isArabic ? 'تعذر رفع الملف' : 'Unable to upload file'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +84,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
         freelancerAvatar: contract.freelancerAvatar,
         issueType,
         description: description.trim(),
-        evidenceAttachments: []
+        evidenceAttachments: evidence.map((item) => item.url)
       });
 
       if (succeeded === false) {
@@ -55,6 +92,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
       }
 
       setDescription('');
+      setEvidence([]);
       setShowModal(false);
     } finally {
       setSubmitting(false);
@@ -108,20 +146,39 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   <td className="py-3.5 px-4">
                     <span className="inline-flex items-center gap-1 font-bold text-[11px] text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">
                       <AlertTriangle className="w-3 h-3 text-red-600" />
-                      {disp.issueType === 'delay'
-                        ? isArabic ? 'تأخر في التسليم' : 'Delay'
-                        : isArabic ? 'جودة غير مطابقة' : 'Quality issue'}
+                      {(ISSUE_LABELS[disp.issueType] || ISSUE_LABELS.other)[isArabic ? 0 : 1]}
                     </span>
                   </td>
                   <td className="py-3.5 px-4 max-w-xs">
                     <div className="font-bold text-slate-900">{disp.projectTitle}</div>
                     <div className="text-[11px] text-slate-400">{disp.freelancerName}</div>
+                    {disp.evidenceAttachments.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {disp.evidenceAttachments.map((url, i) => (
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 hover:underline"
+                          >
+                            <Paperclip className="w-3 h-3" />
+                            {isArabic ? `دليل ${i + 1}` : `Evidence ${i + 1}`}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="py-3.5 px-4 text-slate-500 font-medium">
                     {disp.filedAt}
                   </td>
                   <td className="py-3.5 px-4">
-                    {disp.status === 'resolved' ? (
+                    {disp.status === 'closed' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                        <CheckCircle2 className="w-3 h-3 text-slate-500" />
+                        {isArabic ? 'مغلق' : 'Closed'}
+                      </span>
+                    ) : disp.status === 'resolved' ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                         {isArabic ? 'تم الحل واسترداد الضمان' : 'Resolved'}
@@ -140,6 +197,13 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   </td>
                 </tr>
               ))}
+              {disputes.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-slate-400">
+                    {isArabic ? 'لا توجد نزاعات مفتوحة. نتمنى أن يبقى الأمر كذلك!' : 'No disputes yet.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -193,6 +257,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                   <option value="quality">{isArabic ? 'مخرجات غير مطابقة للمواصفات' : 'Quality Does Not Match Scope'}</option>
                   <option value="scope_breach">{isArabic ? 'طلب مبالغ خارج المنصة أو إخلال بالعقد' : 'Policy or Scope Breach'}</option>
                   <option value="communication">{isArabic ? 'انقطاع التواصل مع المستقل' : 'Freelancer Unresponsive'}</option>
+                  <option value="other">{isArabic ? 'مشكلة أخرى' : 'Other'}</option>
                 </select>
               </div>
 
@@ -214,6 +279,45 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  {isArabic ? 'مرفقات وأدلة (اختياري)' : 'Evidence attachments (optional)'}
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50 cursor-pointer hover:bg-slate-100">
+                  <Paperclip className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-600">
+                    {uploading
+                      ? isArabic ? 'جاري الرفع...' : 'Uploading...'
+                      : isArabic ? 'اختر صوراً أو ملفات PDF' : 'Choose images or PDF files'}
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={handleEvidenceSelected}
+                  />
+                </label>
+                {uploadError && <p className="text-[11px] font-bold text-red-600 mt-1">{uploadError}</p>}
+                {evidence.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {evidence.map((item) => (
+                      <li key={item.url} className="flex items-center justify-between text-[11px] bg-slate-50 rounded-lg px-2 py-1">
+                        <span className="truncate">{item.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEvidence((prev) => prev.filter((e) => e.url !== item.url))}
+                          className="text-red-500 font-bold ms-2"
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-[11px] leading-relaxed">
                 {isArabic
                   ? 'عند فتح النزاع، يتم تجميد أموال الضمان فوراً، ويتدخل مشرف المنصة لمراجعة ملفات التسليم والمحادثات لاتخاذ قرار ملزم خلال 48 ساعة.'
@@ -230,7 +334,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || contracts.length === 0}
+                  disabled={submitting || uploading || contracts.length === 0}
                   className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-600/20 transition-all disabled:opacity-60 disabled:pointer-events-none"
                 >
                   {submitting

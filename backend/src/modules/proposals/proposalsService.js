@@ -6,6 +6,7 @@ import {
   NOTIFICATION_TYPES,
   notifyUser,
 } from '../notifications/notificationMessages.js';
+import { markInvitationAccepted } from '../projects/invitations/invitationsPersistence.js';
 import { insertConversation } from '../workspace/chat/chatPersistence.js';
 import { insertContract } from '../workspace/contracts/contractsPersistence.js';
 import {
@@ -90,6 +91,18 @@ export const createProposal = async (projectId, actor, payload) => {
   );
 
   const created = await insertProposal(project.id, freelancer.id, payload);
+
+  const clientProfile = await findClientProfileById(project.client_id);
+
+  if (clientProfile?.user_id) {
+    await notifyUser({
+      userId: clientProfile.user_id,
+      type: NOTIFICATION_TYPES.PROPOSAL_RECEIVED,
+    });
+  }
+
+  await markInvitationAccepted(project.id, freelancer.id);
+
   return toPublicProposal(created);
 };
 
@@ -211,5 +224,15 @@ export const rejectProposalById = async (proposalId, actor) => {
   requirePendingProposal(proposal, 'Proposal cannot be rejected');
 
   const rejected = await updateProposalStatusById(proposal.id, 'rejected');
+
+  const freelancer = await findFreelancerProfileById(proposal.freelancer_id);
+
+  if (freelancer?.user_id) {
+    await notifyUser({
+      userId: freelancer.user_id,
+      type: NOTIFICATION_TYPES.PROPOSAL_REJECTED,
+    });
+  }
+
   return requireProposal(rejected);
 };

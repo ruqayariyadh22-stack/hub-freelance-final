@@ -12,6 +12,9 @@ const toPublicClient = (profile) => ({
   user_id: profile.user_id,
   company_name: profile.company_name,
   logo: profile.logo,
+  bio: profile.bio ?? null,
+  location: profile.location ?? null,
+  website: profile.website ?? null,
 });
 
 const requireClientProfile = (profile) => {

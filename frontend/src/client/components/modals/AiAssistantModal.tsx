@@ -10,6 +10,7 @@ import {
   HelpCircle,
   ArrowRight
 } from 'lucide-react';
+import { ClientApiError, clientRequest, errorText } from '../../api';
 
 interface AiAssistantModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   if (!isOpen) return null;
 
@@ -51,37 +53,48 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         'What are the guidelines for Scope Change requests?'
       ];
 
-  const handleSend = (textToSend?: string) => {
-    const text = textToSend || query;
-    if (!text.trim()) return;
+  const handleSend = async (textToSend?: string) => {
+    const text = (textToSend || query).trim();
+    if (!text || isTyping) return;
+
+    const history = conversation
+      .slice(1)
+      .map(({ role, text: turnText }) => ({ role, text: turnText }));
 
     setConversation((prev) => [...prev, { role: 'user', text }]);
     setQuery('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      let reply = '';
-      if (text.includes('Next.js') || text.includes('متجر') || text.includes('تكلفة') || text.includes('budget')) {
-        reply = isArabic
-          ? 'بناءً على مشاريع المنصة المكتملة:\n- متجر Next.js متوسط الحجم مع سلة دفع وإدارة مخزون يتراوح بين 800$ إلى 1,500$.\n- متوسط مدة التنفيذ المقترحة: من 20 إلى 30 يوماً.\n- أنصحك بطلب تقنيات: Next.js 14, Tailwind CSS, TypeScript, و Stripe لضمان أداء وسرعة عالية.'
-          : 'Based on completed platform benchmarks:\n- A mid-sized Next.js store with checkout and dashboard ranges between $800 and $1,500.\n- Recommended timeline: 20 to 30 days.\n- Recommended stack: Next.js 14, Tailwind CSS, TypeScript, and Stripe for optimal performance.';
-      } else if (text.includes('مطابقة') || text.includes('Matching') || text.includes('AI')) {
-        reply = isArabic
-          ? 'يقوم محرك الذكاء الاصطناعي بتحليل 4 محاور أساسية:\n1. تطابق المهارات التقنية المطلوبة (Skills Match).\n2. سابقة أعمال المستقل ومستوى المشاريع المشابهة (Portfolio Relevance).\n3. سنوات الخبرة العملية (Experience Match).\n4. تقييمات ومعدل التسليم في الموعد المحدد (Specialty & Rating).'
-          : 'The AI Matching Engine scores candidates across 4 key vectors:\n1. Technical Skills Match (90-100%).\n2. Portfolio Relevance to your specific domain.\n3. Practical Experience years.\n4. Timeliness and customer satisfaction ratings.';
-      } else if (text.includes('Scope') || text.includes('تعديل') || text.includes('نطاق')) {
-        reply = isArabic
-          ? 'في هاب فري لانسر، طلب تعديل النطاق (Scope Change Request) هو إجراء موثق يطلبه المستقل عند إضافة مزايا خارج الاتفاق المبدئي، ويشمل تحديد السعر الإضافي وعدد أيام التمديد. ولا يتم خصم أي مبالغ من محفظتك إلا بعد موافقتك الصريحة.'
-          : 'In Hub Freelancer, Scope Change Requests are formal adjustments requested by freelancers when requirements expand. You have full discretion to Approve or Reject changes before escrow funds adjust.';
-      } else {
-        reply = isArabic
-          ? 'شكراً لسؤالك! يمكنك البدء الآن بنشر مشروع جديد وتحديد أفكارك الأولية، وسأقوم بتحويلها تلقائياً إلى وثيقة نطاق عمل احترافية.'
-          : 'Thank you for your question! You can post a new project right now, and our AI Assistant will refine the specifications for you.';
+    try {
+      const data = await clientRequest<{ reply: string; usage?: { remaining: number } }>('/ai/assistant', {
+        method: 'POST',
+        body: { message: text, history }
+      });
+      setConversation((prev) => [...prev, { role: 'assistant', text: data.reply }]);
+      if (data.usage) {
+        setRemaining(data.usage.remaining);
       }
-
-      setConversation((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch (err) {
+      const status = err instanceof ClientApiError ? err.status : 0;
+      const fallback =
+        status === 429
+          ? isArabic
+            ? 'وصلت إلى الحد اليومي لأسئلة المساعد الذكي. حاول مجدداً غداً.'
+            : 'You have reached the daily AI assistant limit. Please try again tomorrow.'
+          : status === 503
+            ? isArabic
+              ? 'المساعد الذكي غير متاح حالياً. تأكد من إعداد مفتاح Gemini على الخادم.'
+              : 'The AI assistant is currently unavailable. Make sure the Gemini API key is configured on the server.'
+            : isArabic
+              ? 'تعذر الحصول على رد من المساعد. حاول مرة أخرى.'
+              : 'Unable to get a reply from the assistant. Please try again.';
+      setConversation((prev) => [
+        ...prev,
+        { role: 'assistant', text: status === 429 || status === 503 ? fallback : errorText(err, fallback) }
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 800);
+    }
   };
 
   return (
@@ -99,6 +112,12 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
               </h2>
               <p className="text-[11px] text-purple-600 font-semibold">
                 {isArabic ? 'استشارات الميزانية ونطاق العمل' : 'Budget & Project Consultation'}
+                {remaining !== null && (
+                  <span className="text-slate-400 font-normal">
+                    {' · '}
+                    {isArabic ? `متبقي اليوم: ${remaining}` : `${remaining} left today`}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -177,7 +196,8 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
             />
             <button
               type="submit"
-              className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl shadow-sm transition-all"
+              disabled={isTyping}
+              className="disabled:opacity-50 bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl shadow-sm transition-all"
             >
               <Send className="w-4 h-4" />
             </button>
